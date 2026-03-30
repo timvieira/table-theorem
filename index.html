@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Wobbly Table Theorem</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Georgia', serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    overflow-x: hidden;
+  }
+  #header {
+    text-align: center;
+    padding: 24px 20px 12px;
+    background: linear-gradient(180deg, #16213e, #1a1a2e);
+  }
+  #header h1 {
+    font-size: 2em;
+    color: #e8d5b7;
+    letter-spacing: 0.02em;
+  }
+  #header p {
+    font-size: 1.05em;
+    color: #a0a0b8;
+    max-width: 720px;
+    margin: 8px auto 0;
+    line-height: 1.5;
+  }
+  #main {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+    padding: 16px 20px;
+  }
+  #scene-container {
+    width: 640px;
+    height: 480px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #0f0f23;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    cursor: grab;
+  }
+  #scene-container:active { cursor: grabbing; }
+  #side-panel {
+    width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .panel {
+    background: #16213e;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  }
+  .panel h3 {
+    color: #e8d5b7;
+    margin-bottom: 10px;
+    font-size: 1em;
+  }
+  .control-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .control-row label {
+    width: 120px;
+    font-size: 0.9em;
+    color: #b0b0c8;
+  }
+  .control-row input[type="range"] {
+    flex: 1;
+    accent-color: #e8d5b7;
+  }
+  .control-row .val {
+    width: 48px;
+    text-align: right;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+    color: #e8d5b7;
+  }
+  button {
+    background: #2a2a5e;
+    color: #e8d5b7;
+    border: 1px solid #3a3a7e;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.9em;
+    transition: background 0.15s;
+  }
+  button:hover { background: #3a3a7e; }
+  button.active { background: #5a4a2e; border-color: #e8d5b7; }
+  #chart-container {
+    width: 100%;
+    height: 180px;
+    position: relative;
+  }
+  #chart-canvas {
+    width: 100%;
+    height: 100%;
+    border-radius: 4px;
+  }
+  #leg-indicators {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .leg-indicator {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.85em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: #1a1a3e;
+  }
+  .leg-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  .leg-gap {
+    font-family: 'Courier New', monospace;
+    font-size: 0.8em;
+  }
+  #explanation {
+    max-width: 1020px;
+    margin: 0 auto;
+    padding: 0 20px 40px;
+  }
+  #explanation .panel {
+    line-height: 1.6;
+    font-size: 0.95em;
+    color: #c0c0d8;
+  }
+  #explanation .panel h3 { margin-bottom: 6px; }
+  #explanation em { color: #e8d5b7; font-style: normal; }
+  .eq {
+    font-family: 'Courier New', monospace;
+    background: #1a1a3e;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: #e8d5b7;
+    font-size: 0.9em;
+  }
+  #buttons-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .zero-marker {
+    color: #5f5;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>The Wobbly Table Theorem</h1>
+  <p>A square table on an uneven (but continuous) floor can <em>always</em> be stabilized
+     by rotating it at most 90&deg;.</p>
+</div>
+
+<div id="main">
+  <div id="scene-container"></div>
+  <div id="side-panel">
+    <div class="panel">
+      <h3>Controls</h3>
+      <div class="control-row">
+        <label>Rotation &theta;</label>
+        <input type="range" id="theta-slider" min="0" max="90" step="0.5" value="0">
+        <span class="val" id="theta-val">0.0&deg;</span>
+      </div>
+      <div class="control-row">
+        <label>Floor lumpiness</label>
+        <input type="range" id="lumpiness-slider" min="0" max="100" step="1" value="50">
+        <span class="val" id="lumpiness-val">50</span>
+      </div>
+      <div class="control-row">
+        <label>Table size</label>
+        <input type="range" id="size-slider" min="30" max="80" step="1" value="50">
+        <span class="val" id="size-val">50</span>
+      </div>
+      <div id="buttons-row">
+        <button id="btn-new-floor">New Random Floor</button>
+        <button id="btn-animate" class="">Animate</button>
+        <button id="btn-find-zero">Find Balance</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Wobble function <span class="eq">f(&theta;)</span></h3>
+      <div id="chart-container">
+        <canvas id="chart-canvas"></canvas>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Leg status</h3>
+      <div id="leg-indicators">
+        <div class="leg-indicator"><div class="leg-dot" style="background:#ff6b6b"></div>A <span class="leg-gap" id="gap-a"></span></div>
+        <div class="leg-indicator"><div class="leg-dot" style="background:#4ecdc4"></div>B <span class="leg-gap" id="gap-b"></span></div>
+        <div class="leg-indicator"><div class="leg-dot" style="background:#ffe66d"></div>C <span class="leg-gap" id="gap-c"></span></div>
+        <div class="leg-indicator"><div class="leg-dot" style="background:#a18cd1"></div>D <span class="leg-gap" id="gap-d"></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="explanation">
+  <div class="panel">
+    <h3>How it works</h3>
+    <p>
+      Place a square table on a bumpy (but continuous) floor. Three legs always define a plane,
+      but the fourth may hover or dig in. Define the <em>wobble function</em>:
+    </p>
+    <p style="text-align:center; margin: 10px 0;">
+      <span class="eq">f(&theta;) = (h<sub>A</sub> + h<sub>C</sub>) &minus; (h<sub>B</sub> + h<sub>D</sub>)</span>
+    </p>
+    <p>
+      where <em>h<sub>i</sub></em> is the floor height at leg <em>i</em>'s position when the table
+      is rotated by angle <em>&theta;</em>. For a square table, rotating by 90&deg; swaps the diagonal
+      pairs (A,C) and (B,D), so:
+    </p>
+    <p style="text-align:center; margin: 10px 0;">
+      <span class="eq">f(&theta; + 90&deg;) = &minus;f(&theta;)</span>
+    </p>
+    <p>
+      Since <em>f</em> is continuous (the floor is continuous) and changes sign, the
+      <em>Intermediate Value Theorem</em> guarantees some <em>&theta;*</em> where
+      <span class="eq">f(&theta;*) = 0</span> &mdash; all four legs touch the ground.
+    </p>
+    <p style="margin-top: 10px; font-size: 0.88em; color: #8888aa;">
+      Reference: Baritompa, L&ouml;wen, Polster &amp; Ross,
+      <a href="https://arxiv.org/abs/math/0511490" style="color:#8888cc;">"Mathematical Table Turning Revisited"</a> (2005).
+      The full theorem requires a Lipschitz condition (floor slope &le; ~35&deg;) and sufficient leg length.
+    </p>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ============================================================
+// Floor generation — sum of random sinusoids
+// ============================================================
+class LumpyFloor {
+  constructor(numTerms = 12, amplitude = 0.5) {
+    this.terms = [];
+    this.regenerate(numTerms, amplitude);
+  }
+
+  regenerate(numTerms, amplitude) {
+    this.terms = [];
+    for (let i = 0; i < numTerms; i++) {
+      this.terms.push({
+        ax: (Math.random() - 0.5) * 3,
+        ay: (Math.random() - 0.5) * 3,
+        phase: Math.random() * Math.PI * 2,
+        amp: (Math.random() * 0.5 + 0.5) * amplitude / numTerms,
+      });
+    }
+  }
+
+  height(x, y) {
+    let z = 0;
+    for (const t of this.terms) {
+      z += t.amp * Math.sin(t.ax * x + t.ay * y + t.phase);
+    }
+    return z;
+  }
+}
+
+// ============================================================
+// State
+// ============================================================
+const state = {
+  theta: 0,            // rotation angle in radians
+  tableRadius: 1.8,    // half-diagonal of the square table
+  lumpiness: 0.5,
+  animating: false,
+  animDir: 1,
+};
+
+const floor = new LumpyFloor(14, state.lumpiness);
+
+// ============================================================
+// Three.js setup
+// ============================================================
+const container = document.getElementById('scene-container');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(640, 480);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0f0f23);
+scene.fog = new THREE.FogExp2(0x0f0f23, 0.04);
+
+const camera = new THREE.PerspectiveCamera(50, 640 / 480, 0.1, 100);
+camera.position.set(5, 6, 5);
+camera.lookAt(0, 0, 0);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 0.5, 0);
+controls.minDistance = 3;
+controls.maxDistance = 15;
+
+// Lights
+const ambientLight = new THREE.AmbientLight(0x404060, 1.5);
+scene.add(ambientLight);
+const dirLight = new THREE.DirectionalLight(0xffeedd, 2);
+dirLight.position.set(5, 8, 3);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(1024, 1024);
+scene.add(dirLight);
+
+const fillLight = new THREE.DirectionalLight(0x6688cc, 0.5);
+fillLight.position.set(-3, 4, -2);
+scene.add(fillLight);
+
+// ============================================================
+// Floor mesh
+// ============================================================
+const FLOOR_SIZE = 10;
+const FLOOR_SEG = 80;
+const floorGeo = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE, FLOOR_SEG, FLOOR_SEG);
+floorGeo.rotateX(-Math.PI / 2);
+const floorMat = new THREE.MeshStandardMaterial({
+  color: 0x2a4a3a,
+  roughness: 0.85,
+  metalness: 0.1,
+  flatShading: false,
+  side: THREE.DoubleSide,
+});
+const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+floorMesh.receiveShadow = true;
+scene.add(floorMesh);
+
+function updateFloorMesh() {
+  const pos = floorGeo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    pos.setY(i, floor.height(x, z));
+  }
+  pos.needsUpdate = true;
+  floorGeo.computeVertexNormals();
+}
+updateFloorMesh();
+
+// Grid helper
+const gridHelper = new THREE.GridHelper(FLOOR_SIZE, 20, 0x224422, 0x183018);
+gridHelper.position.y = -0.01;
+scene.add(gridHelper);
+
+// ============================================================
+// Table
+// ============================================================
+const LEG_COLORS = [0xff6b6b, 0x4ecdc4, 0xffe66d, 0xa18cd1]; // A, B, C, D
+const legLabels = ['A', 'B', 'C', 'D'];
+
+// Table group
+const tableGroup = new THREE.Group();
+scene.add(tableGroup);
+
+// Tabletop
+const topGeo = new THREE.BoxGeometry(1, 0.06, 1);
+const topMat = new THREE.MeshStandardMaterial({
+  color: 0x8B6914,
+  roughness: 0.6,
+  metalness: 0.15,
+});
+const tabletop = new THREE.Mesh(topGeo, topMat);
+tabletop.castShadow = true;
+tableGroup.add(tabletop);
+
+// Legs
+const legs = [];
+const legTouchSpheres = [];   // little spheres at foot of each leg
+const legGeo = new THREE.CylinderGeometry(0.03, 0.03, 1, 8);
+const LEG_LENGTH = 1.0;
+
+for (let i = 0; i < 4; i++) {
+  const legMat = new THREE.MeshStandardMaterial({ color: LEG_COLORS[i], roughness: 0.5 });
+  const leg = new THREE.Mesh(legGeo, legMat);
+  leg.castShadow = true;
+  tableGroup.add(leg);
+  legs.push(leg);
+
+  // Foot sphere
+  const sphereGeo = new THREE.SphereGeometry(0.06, 12, 12);
+  const sphere = new THREE.Mesh(sphereGeo, legMat.clone());
+  scene.add(sphere);
+  legTouchSpheres.push(sphere);
+}
+
+// Gap lines (dashed lines from foot to floor when hovering)
+const gapLines = [];
+for (let i = 0; i < 4; i++) {
+  const mat = new THREE.LineDashedMaterial({
+    color: LEG_COLORS[i],
+    dashSize: 0.05,
+    gapSize: 0.03,
+    transparent: true,
+    opacity: 0.7,
+  });
+  const geo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0,0,0), new THREE.Vector3(0,1,0)
+  ]);
+  const line = new THREE.Line(geo, mat);
+  line.computeLineDistances();
+  scene.add(line);
+  gapLines.push(line);
+}
+
+// ============================================================
+// Table placement logic
+// ============================================================
+
+// Leg positions in local frame (unit square, centered)
+// A=front-right, B=front-left, C=back-left, D=back-right
+const localLegs = [
+  [+1, +1],  // A
+  [-1, +1],  // B
+  [-1, -1],  // C
+  [+1, -1],  // D
+];
+
+function getLegWorldPos(theta, R) {
+  // Returns [{x, y (floor plane), floorZ}] for each leg
+  const cosT = Math.cos(theta);
+  const sinT = Math.sin(theta);
+  const half = R / Math.SQRT2; // half-side = R / sqrt(2), but actually R is half-diagonal
+  return localLegs.map(([lx, ly]) => {
+    const x = half * (lx * cosT - ly * sinT);
+    const y = half * (lx * sinT + ly * cosT);
+    return { x, y, floorZ: floor.height(x, y) };
+  });
+}
+
+function computeWobble(theta, R) {
+  const p = getLegWorldPos(theta, R);
+  return (p[0].floorZ + p[2].floorZ) - (p[1].floorZ + p[3].floorZ);
+}
+
+// Place table: find a rigid placement where we minimize wobble visually.
+// We seat the table so all 4 legs are at the *average* height of the floor
+// at the 4 corners, then tilt to rest on the 3 lowest legs. The 4th hovers.
+function placeTable(theta, R) {
+  const p = getLegWorldPos(theta, R);
+  const zs = p.map(pi => pi.floorZ);
+
+  // The table is rigid and flat. We want to place it so that 3 legs
+  // sit on the floor and 1 hovers (or all 4 touch if balanced).
+  // Approach: find the plane through 3 of the 4 floor-contact points
+  // such that the 4th point is ABOVE the floor (not below).
+
+  // For each triplet of legs, compute the plane and check if the 4th
+  // leg is above or at the floor.
+  let bestConfig = null;
+
+  for (let skip = 0; skip < 4; skip++) {
+    const idx = [0,1,2,3].filter(i => i !== skip);
+    // Three points on the floor
+    const pts = idx.map(i => new THREE.Vector3(p[i].x, p[i].floorZ, p[i].y));
+
+    // Find plane through these 3 points
+    const v1 = new THREE.Vector3().subVectors(pts[1], pts[0]);
+    const v2 = new THREE.Vector3().subVectors(pts[2], pts[0]);
+    const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
+
+    // Height of the 4th leg on this plane
+    const d = -normal.dot(pts[0]);
+    const p4world = new THREE.Vector3(p[skip].x, 0, p[skip].y);
+    // Solve for y: normal.x * x + normal.y * y + normal.z * z + d = 0
+    if (Math.abs(normal.y) < 1e-10) continue;
+    const tableY4 = -(normal.x * p4world.x + normal.z * p4world.z + d) / normal.y;
+    const gap = tableY4 - p[skip].floorZ;
+
+    // The 4th leg should be above or on the floor
+    if (gap >= -1e-6) {
+      // This is a valid seating — the table rests on these 3 legs
+      // and the 4th leg hovers by 'gap'
+      if (!bestConfig || gap < bestConfig.gap) {
+        bestConfig = { skip, idx, pts, normal, d, gap, tableY4 };
+      }
+    }
+  }
+
+  if (!bestConfig) {
+    // Fallback: just use the first triplet (shouldn't happen with smooth floors)
+    bestConfig = { skip: 3, idx: [0,1,2], pts: null, gap: 0 };
+  }
+
+  // Compute final leg positions in 3D (x, height, z) for all 4 legs
+  const result = [];
+  const { skip, normal: N, d: D } = bestConfig;
+  for (let i = 0; i < 4; i++) {
+    const floorY = p[i].floorZ;
+    let tableY;
+    if (i === skip) {
+      tableY = bestConfig.tableY4;
+    } else {
+      tableY = floorY;
+    }
+    result.push({
+      worldX: p[i].x,
+      worldZ: p[i].y,
+      floorY,
+      tableY,
+      gap: tableY - floorY,
+      onGround: i !== skip,
+    });
+  }
+
+  return result;
+}
+
+function updateTable() {
+  const R = state.tableRadius;
+  const half = R / Math.SQRT2;
+  const placement = placeTable(state.theta, R);
+
+  // Compute tabletop plane from 4 leg top positions
+  // Leg top = (worldX, tableY + LEG_LENGTH, worldZ) ... but we want the tabletop
+  // to be at tableY + LEG_LENGTH above each leg foot.
+  // Actually: the legs hang down from the tabletop. The foot of each leg is at tableY.
+  // The tabletop is LEG_LENGTH above.
+
+  // Build the 4 top-of-leg positions
+  const topPositions = placement.map(p => new THREE.Vector3(p.worldX, p.tableY + LEG_LENGTH, p.worldZ));
+
+  // Tabletop center
+  const center = new THREE.Vector3();
+  topPositions.forEach(tp => center.add(tp));
+  center.divideScalar(4);
+
+  // Tabletop orientation from the 4 corners
+  const right = new THREE.Vector3().subVectors(topPositions[0], topPositions[1]).normalize();
+  const forward = new THREE.Vector3().subVectors(topPositions[0], topPositions[3]).normalize();
+  const up = new THREE.Vector3().crossVectors(forward, right).normalize();
+
+  // Set tabletop transform
+  tabletop.position.copy(center);
+  const mat4 = new THREE.Matrix4().makeBasis(right, up, forward);
+  tabletop.setRotationFromMatrix(mat4);
+  tabletop.scale.set(half * 2, 1, half * 2);
+
+  // Set legs
+  for (let i = 0; i < 4; i++) {
+    const foot = new THREE.Vector3(placement[i].worldX, placement[i].tableY, placement[i].worldZ);
+    const top = topPositions[i];
+    const mid = new THREE.Vector3().addVectors(foot, top).multiplyScalar(0.5);
+    legs[i].position.copy(mid);
+    legs[i].scale.set(1, LEG_LENGTH, 1);
+    // Orient leg to point from foot to top
+    const dir = new THREE.Vector3().subVectors(top, foot).normalize();
+    const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
+    legs[i].setRotationFromQuaternion(quat);
+
+    // Foot sphere
+    legTouchSpheres[i].position.copy(foot);
+    const isHovering = placement[i].gap > 0.005;
+    legTouchSpheres[i].material.emissive = new THREE.Color(isHovering ? 0x442200 : 0x004400);
+    legTouchSpheres[i].material.emissiveIntensity = isHovering ? 0.8 : 0.5;
+    legTouchSpheres[i].scale.setScalar(isHovering ? 1.3 : 1.0);
+
+    // Gap line
+    const floorPt = new THREE.Vector3(placement[i].worldX, placement[i].floorY, placement[i].worldZ);
+    const pts = [floorPt, foot];
+    gapLines[i].geometry.setFromPoints(pts);
+    gapLines[i].computeLineDistances();
+    gapLines[i].visible = isHovering;
+  }
+
+  // Update leg status display
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById(`gap-${legLabels[i].toLowerCase()}`);
+    const gap = placement[i].gap;
+    if (gap < 0.005) {
+      el.textContent = 'on ground';
+      el.style.color = '#5f5';
+    } else {
+      el.textContent = `+${gap.toFixed(3)}`;
+      el.style.color = '#fa5';
+    }
+  }
+}
+
+// ============================================================
+// Chart (wobble function plot)
+// ============================================================
+const chartCanvas = document.getElementById('chart-canvas');
+const chartCtx = chartCanvas.getContext('2d');
+
+function drawChart() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = chartCanvas.getBoundingClientRect();
+  chartCanvas.width = rect.width * dpr;
+  chartCanvas.height = rect.height * dpr;
+  chartCtx.scale(dpr, dpr);
+  const W = rect.width;
+  const H = rect.height;
+
+  chartCtx.clearRect(0, 0, W, H);
+  chartCtx.fillStyle = '#0f0f23';
+  chartCtx.fillRect(0, 0, W, H);
+
+  const R = state.tableRadius;
+  const N = 200;
+  const margin = { left: 40, right: 16, top: 16, bottom: 28 };
+  const plotW = W - margin.left - margin.right;
+  const plotH = H - margin.top - margin.bottom;
+
+  // Compute f(theta) for theta in [0, 90]
+  const values = [];
+  let maxAbs = 0;
+  for (let i = 0; i <= N; i++) {
+    const deg = (i / N) * 90;
+    const rad = deg * Math.PI / 180;
+    const f = computeWobble(rad, R);
+    values.push({ deg, f });
+    maxAbs = Math.max(maxAbs, Math.abs(f));
+  }
+  if (maxAbs < 0.01) maxAbs = 0.01;
+  maxAbs *= 1.15;
+
+  const toX = deg => margin.left + (deg / 90) * plotW;
+  const toY = f => margin.top + plotH / 2 - (f / maxAbs) * (plotH / 2);
+
+  // Axes
+  chartCtx.strokeStyle = '#334';
+  chartCtx.lineWidth = 1;
+  chartCtx.beginPath();
+  chartCtx.moveTo(margin.left, margin.top);
+  chartCtx.lineTo(margin.left, H - margin.bottom);
+  chartCtx.lineTo(W - margin.right, H - margin.bottom);
+  chartCtx.stroke();
+
+  // Zero line
+  chartCtx.strokeStyle = '#445';
+  chartCtx.setLineDash([4, 4]);
+  chartCtx.beginPath();
+  chartCtx.moveTo(margin.left, toY(0));
+  chartCtx.lineTo(W - margin.right, toY(0));
+  chartCtx.stroke();
+  chartCtx.setLineDash([]);
+
+  // f(theta) curve
+  chartCtx.strokeStyle = '#e8d5b7';
+  chartCtx.lineWidth = 2;
+  chartCtx.beginPath();
+  for (let i = 0; i <= N; i++) {
+    const x = toX(values[i].deg);
+    const y = toY(values[i].f);
+    if (i === 0) chartCtx.moveTo(x, y); else chartCtx.lineTo(x, y);
+  }
+  chartCtx.stroke();
+
+  // Fill positive/negative regions
+  // Positive (above zero line)
+  chartCtx.beginPath();
+  chartCtx.moveTo(toX(0), toY(0));
+  for (let i = 0; i <= N; i++) {
+    const x = toX(values[i].deg);
+    const y = Math.min(toY(values[i].f), toY(0));
+    chartCtx.lineTo(x, y);
+  }
+  chartCtx.lineTo(toX(90), toY(0));
+  chartCtx.closePath();
+  chartCtx.fillStyle = 'rgba(95, 255, 95, 0.08)';
+  chartCtx.fill();
+
+  // Negative
+  chartCtx.beginPath();
+  chartCtx.moveTo(toX(0), toY(0));
+  for (let i = 0; i <= N; i++) {
+    const x = toX(values[i].deg);
+    const y = Math.max(toY(values[i].f), toY(0));
+    chartCtx.lineTo(x, y);
+  }
+  chartCtx.lineTo(toX(90), toY(0));
+  chartCtx.closePath();
+  chartCtx.fillStyle = 'rgba(255, 95, 95, 0.08)';
+  chartCtx.fill();
+
+  // Mark zero crossings
+  for (let i = 0; i < N; i++) {
+    if (values[i].f * values[i + 1].f < 0) {
+      // Linear interpolation for zero crossing
+      const t = values[i].f / (values[i].f - values[i + 1].f);
+      const zeroDeg = values[i].deg + t * (values[i + 1].deg - values[i].deg);
+      const zx = toX(zeroDeg);
+      const zy = toY(0);
+
+      chartCtx.fillStyle = '#5f5';
+      chartCtx.beginPath();
+      chartCtx.arc(zx, zy, 5, 0, Math.PI * 2);
+      chartCtx.fill();
+
+      // Label
+      chartCtx.fillStyle = '#5f5';
+      chartCtx.font = '10px Courier New';
+      chartCtx.textAlign = 'center';
+      chartCtx.fillText(`${zeroDeg.toFixed(1)}°`, zx, zy - 10);
+    }
+  }
+
+  // Current theta marker
+  const currentDeg = state.theta * 180 / Math.PI;
+  const cf = computeWobble(state.theta, R);
+  const cx = toX(currentDeg);
+  const cy = toY(cf);
+
+  chartCtx.fillStyle = '#fff';
+  chartCtx.beginPath();
+  chartCtx.arc(cx, cy, 5, 0, Math.PI * 2);
+  chartCtx.fill();
+  chartCtx.strokeStyle = '#e8d5b7';
+  chartCtx.lineWidth = 1.5;
+  chartCtx.stroke();
+
+  // Vertical line at current theta
+  chartCtx.strokeStyle = 'rgba(255,255,255,0.2)';
+  chartCtx.setLineDash([3, 3]);
+  chartCtx.beginPath();
+  chartCtx.moveTo(cx, margin.top);
+  chartCtx.lineTo(cx, H - margin.bottom);
+  chartCtx.stroke();
+  chartCtx.setLineDash([]);
+
+  // Axis labels
+  chartCtx.fillStyle = '#889';
+  chartCtx.font = '10px Georgia';
+  chartCtx.textAlign = 'center';
+  chartCtx.fillText('0°', toX(0), H - margin.bottom + 14);
+  chartCtx.fillText('45°', toX(45), H - margin.bottom + 14);
+  chartCtx.fillText('90°', toX(90), H - margin.bottom + 14);
+
+  chartCtx.textAlign = 'right';
+  chartCtx.fillText('f(θ)', margin.left - 4, margin.top + 4);
+  chartCtx.fillText('0', margin.left - 6, toY(0) + 3);
+}
+
+// ============================================================
+// Controls
+// ============================================================
+const thetaSlider = document.getElementById('theta-slider');
+const thetaVal = document.getElementById('theta-val');
+const lumpSlider = document.getElementById('lumpiness-slider');
+const lumpVal = document.getElementById('lumpiness-val');
+const sizeSlider = document.getElementById('size-slider');
+const sizeVal = document.getElementById('size-val');
+
+thetaSlider.addEventListener('input', () => {
+  state.theta = parseFloat(thetaSlider.value) * Math.PI / 180;
+  thetaVal.textContent = parseFloat(thetaSlider.value).toFixed(1) + '°';
+});
+
+lumpSlider.addEventListener('input', () => {
+  state.lumpiness = parseInt(lumpSlider.value) / 100;
+  lumpVal.textContent = lumpSlider.value;
+  floor.regenerate(14, state.lumpiness);
+  updateFloorMesh();
+});
+
+sizeSlider.addEventListener('input', () => {
+  state.tableRadius = parseInt(sizeSlider.value) / 100 * 3.6;
+  sizeVal.textContent = sizeSlider.value;
+});
+
+document.getElementById('btn-new-floor').addEventListener('click', () => {
+  floor.regenerate(14, state.lumpiness);
+  updateFloorMesh();
+});
+
+const btnAnimate = document.getElementById('btn-animate');
+btnAnimate.addEventListener('click', () => {
+  state.animating = !state.animating;
+  btnAnimate.classList.toggle('active', state.animating);
+  btnAnimate.textContent = state.animating ? 'Stop' : 'Animate';
+});
+
+document.getElementById('btn-find-zero').addEventListener('click', () => {
+  // Find first zero crossing
+  const R = state.tableRadius;
+  const N = 500;
+  for (let i = 0; i < N; i++) {
+    const t1 = (i / N) * Math.PI / 2;
+    const t2 = ((i + 1) / N) * Math.PI / 2;
+    const f1 = computeWobble(t1, R);
+    const f2 = computeWobble(t2, R);
+    if (f1 * f2 <= 0) {
+      // Bisect
+      let lo = t1, hi = t2;
+      for (let j = 0; j < 30; j++) {
+        const mid = (lo + hi) / 2;
+        if (computeWobble(lo, R) * computeWobble(mid, R) <= 0) hi = mid;
+        else lo = mid;
+      }
+      const target = (lo + hi) / 2;
+      animateToTheta(target);
+      return;
+    }
+  }
+});
+
+function animateToTheta(target) {
+  state.animating = false;
+  btnAnimate.classList.remove('active');
+  btnAnimate.textContent = 'Animate';
+
+  const start = state.theta;
+  const startTime = performance.now();
+  const duration = 800;
+
+  function step(now) {
+    const t = Math.min((now - startTime) / duration, 1);
+    const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    state.theta = start + (target - start) * ease;
+    thetaSlider.value = (state.theta * 180 / Math.PI).toFixed(1);
+    thetaVal.textContent = parseFloat(thetaSlider.value).toFixed(1) + '°';
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// ============================================================
+// Animation loop
+// ============================================================
+let lastTime = 0;
+function animate(time) {
+  requestAnimationFrame(animate);
+
+  const dt = (time - lastTime) / 1000;
+  lastTime = time;
+
+  if (state.animating) {
+    let deg = parseFloat(thetaSlider.value) + dt * 15 * state.animDir;
+    if (deg >= 90) { deg = 90; state.animDir = -1; }
+    if (deg <= 0) { deg = 0; state.animDir = 1; }
+    thetaSlider.value = deg.toFixed(1);
+    state.theta = deg * Math.PI / 180;
+    thetaVal.textContent = deg.toFixed(1) + '°';
+  }
+
+  updateTable();
+  drawChart();
+  controls.update();
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(animate);
+
+// ============================================================
+// Resize handling
+// ============================================================
+window.addEventListener('resize', () => {
+  // Keep fixed size for now — could make responsive later
+});
+
+</script>
+</body>
+</html>
