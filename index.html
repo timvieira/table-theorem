@@ -4,27 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>The Wobbly Table Theorem</title>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&display=swap" rel="stylesheet">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    font-family: 'Georgia', serif;
-    background: #1a1a2e;
-    color: #e0e0e0;
+    font-family: 'EB Garamond', 'PT Serif', Georgia, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 16pt;
+    background: #fffff8;
+    color: #333;
     overflow-x: hidden;
   }
   #header {
     text-align: center;
     padding: 24px 20px 12px;
-    background: linear-gradient(180deg, #16213e, #1a1a2e);
+    background: #fffff8;
   }
   #header h1 {
-    font-size: 2em;
-    color: #e8d5b7;
+    font-size: 2.2em;
+    font-weight: 575;
+    color: #333;
     letter-spacing: 0.02em;
   }
   #header p {
     font-size: 1.05em;
-    color: #a0a0b8;
+    color: #666;
     max-width: 720px;
     margin: 8px auto 0;
     line-height: 1.5;
@@ -39,10 +42,10 @@
   #scene-container {
     width: 640px;
     height: 480px;
-    border-radius: 8px;
+    border-radius: 4px;
     overflow: hidden;
-    background: #0f0f23;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    background: #f0f0ea;
+    border: 1px solid #ddd;
     cursor: grab;
   }
   #scene-container:active { cursor: grabbing; }
@@ -53,13 +56,14 @@
     gap: 16px;
   }
   .panel {
-    background: #16213e;
-    border-radius: 8px;
+    background: #f3f3ed;
+    border-radius: 4px;
     padding: 16px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    border: 1px solid #e0e0e0;
   }
   .panel h3 {
-    color: #e8d5b7;
+    color: #333;
+    font-weight: 575;
     margin-bottom: 10px;
     font-size: 1em;
   }
@@ -72,32 +76,32 @@
   .control-row label {
     width: 120px;
     font-size: 0.9em;
-    color: #b0b0c8;
+    color: #666;
   }
   .control-row input[type="range"] {
     flex: 1;
-    accent-color: #e8d5b7;
+    accent-color: #999;
   }
   .control-row .val {
     width: 48px;
     text-align: right;
-    font-family: 'Courier New', monospace;
+    font-family: Menlo, Monaco, 'Courier New', monospace;
     font-size: 0.85em;
-    color: #e8d5b7;
+    color: #333;
   }
   button {
-    background: #2a2a5e;
-    color: #e8d5b7;
-    border: 1px solid #3a3a7e;
+    background: #e8e8e8;
+    color: #333;
+    border: 1px solid #ccc;
     padding: 8px 16px;
     border-radius: 4px;
     cursor: pointer;
     font-family: inherit;
     font-size: 0.9em;
-    transition: background 0.15s;
+    transition: background 0.15s, color 0.15s;
   }
-  button:hover { background: #3a3a7e; }
-  button.active { background: #5a4a2e; border-color: #e8d5b7; }
+  button:hover { background: #d0d0c4; }
+  button.active { background: #d0d0c4; border-color: #999; font-weight: 575; }
   #chart-container {
     width: 100%;
     height: 180px;
@@ -120,7 +124,7 @@
     font-size: 0.85em;
     padding: 4px 8px;
     border-radius: 4px;
-    background: #1a1a3e;
+    background: #e8e8e2;
   }
   .leg-dot {
     width: 10px;
@@ -128,7 +132,7 @@
     border-radius: 50%;
   }
   .leg-gap {
-    font-family: 'Courier New', monospace;
+    font-family: Menlo, Monaco, 'Courier New', monospace;
     font-size: 0.8em;
   }
   #explanation {
@@ -139,16 +143,16 @@
   #explanation .panel {
     line-height: 1.6;
     font-size: 0.95em;
-    color: #c0c0d8;
+    color: #555;
   }
   #explanation .panel h3 { margin-bottom: 6px; }
-  #explanation em { color: #e8d5b7; font-style: normal; }
+  #explanation em { color: #333; font-style: italic; }
   .eq {
-    font-family: 'Courier New', monospace;
-    background: #1a1a3e;
+    font-family: Menlo, Monaco, 'Courier New', monospace;
+    background: #efefef;
     padding: 2px 6px;
     border-radius: 3px;
-    color: #e8d5b7;
+    color: #333;
     font-size: 0.9em;
   }
   #buttons-row {
@@ -157,7 +161,7 @@
     flex-wrap: wrap;
   }
   .zero-marker {
-    color: #5f5;
+    color: #2e7d32;
     font-weight: bold;
   }
 </style>
@@ -237,9 +241,9 @@
       <em>Intermediate Value Theorem</em> guarantees some <em>&theta;*</em> where
       <span class="eq">f(&theta;*) = 0</span> &mdash; all four legs touch the ground.
     </p>
-    <p style="margin-top: 10px; font-size: 0.88em; color: #8888aa;">
+    <p style="margin-top: 10px; font-size: 0.88em; color: #999;">
       Reference: Baritompa, L&ouml;wen, Polster &amp; Ross,
-      <a href="https://arxiv.org/abs/math/0511490" style="color:#8888cc;">"Mathematical Table Turning Revisited"</a> (2005).
+      <a href="https://arxiv.org/abs/math/0511490" style="color:#666;">"Mathematical Table Turning Revisited"</a> (2005).
       The full theorem requires a Lipschitz condition (floor slope &le; ~35&deg;) and sufficient leg length.
     </p>
   </div>
@@ -313,8 +317,8 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 container.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0f0f23);
-scene.fog = new THREE.FogExp2(0x0f0f23, 0.04);
+scene.background = new THREE.Color(0xf0f0ea);
+scene.fog = new THREE.FogExp2(0xf0f0ea, 0.04);
 
 const camera = new THREE.PerspectiveCamera(50, 640 / 480, 0.1, 100);
 camera.position.set(5, 6, 5);
@@ -328,7 +332,7 @@ controls.minDistance = 3;
 controls.maxDistance = 15;
 
 // Lights
-const ambientLight = new THREE.AmbientLight(0x404060, 1.5);
+const ambientLight = new THREE.AmbientLight(0x808080, 1.5);
 scene.add(ambientLight);
 const dirLight = new THREE.DirectionalLight(0xffeedd, 2);
 dirLight.position.set(5, 8, 3);
@@ -348,7 +352,7 @@ const FLOOR_SEG = 80;
 const floorGeo = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE, FLOOR_SEG, FLOOR_SEG);
 floorGeo.rotateX(-Math.PI / 2);
 const floorMat = new THREE.MeshStandardMaterial({
-  color: 0x2a4a3a,
+  color: 0x7a9a6a,
   roughness: 0.85,
   metalness: 0.1,
   flatShading: false,
@@ -371,7 +375,7 @@ function updateFloorMesh() {
 updateFloorMesh();
 
 // Grid helper
-const gridHelper = new THREE.GridHelper(FLOOR_SIZE, 20, 0x224422, 0x183018);
+const gridHelper = new THREE.GridHelper(FLOOR_SIZE, 20, 0x88aa88, 0xaaccaa);
 gridHelper.position.y = -0.01;
 scene.add(gridHelper);
 
@@ -625,7 +629,7 @@ function drawChart() {
   const H = rect.height;
 
   chartCtx.clearRect(0, 0, W, H);
-  chartCtx.fillStyle = '#0f0f23';
+  chartCtx.fillStyle = '#f8f8f4';
   chartCtx.fillRect(0, 0, W, H);
 
   const R = state.tableRadius;
@@ -651,7 +655,7 @@ function drawChart() {
   const toY = f => margin.top + plotH / 2 - (f / maxAbs) * (plotH / 2);
 
   // Axes
-  chartCtx.strokeStyle = '#334';
+  chartCtx.strokeStyle = '#ccc';
   chartCtx.lineWidth = 1;
   chartCtx.beginPath();
   chartCtx.moveTo(margin.left, margin.top);
@@ -660,7 +664,7 @@ function drawChart() {
   chartCtx.stroke();
 
   // Zero line
-  chartCtx.strokeStyle = '#445';
+  chartCtx.strokeStyle = '#ddd';
   chartCtx.setLineDash([4, 4]);
   chartCtx.beginPath();
   chartCtx.moveTo(margin.left, toY(0));
@@ -669,7 +673,7 @@ function drawChart() {
   chartCtx.setLineDash([]);
 
   // f(theta) curve
-  chartCtx.strokeStyle = '#e8d5b7';
+  chartCtx.strokeStyle = '#555';
   chartCtx.lineWidth = 2;
   chartCtx.beginPath();
   for (let i = 0; i <= N; i++) {
@@ -690,7 +694,7 @@ function drawChart() {
   }
   chartCtx.lineTo(toX(90), toY(0));
   chartCtx.closePath();
-  chartCtx.fillStyle = 'rgba(95, 255, 95, 0.08)';
+  chartCtx.fillStyle = 'rgba(46, 125, 50, 0.1)';
   chartCtx.fill();
 
   // Negative
@@ -703,7 +707,7 @@ function drawChart() {
   }
   chartCtx.lineTo(toX(90), toY(0));
   chartCtx.closePath();
-  chartCtx.fillStyle = 'rgba(255, 95, 95, 0.08)';
+  chartCtx.fillStyle = 'rgba(200, 50, 50, 0.1)';
   chartCtx.fill();
 
   // Mark zero crossings
@@ -715,13 +719,13 @@ function drawChart() {
       const zx = toX(zeroDeg);
       const zy = toY(0);
 
-      chartCtx.fillStyle = '#5f5';
+      chartCtx.fillStyle = '#2e7d32';
       chartCtx.beginPath();
       chartCtx.arc(zx, zy, 5, 0, Math.PI * 2);
       chartCtx.fill();
 
       // Label
-      chartCtx.fillStyle = '#5f5';
+      chartCtx.fillStyle = '#2e7d32';
       chartCtx.font = '10px Courier New';
       chartCtx.textAlign = 'center';
       chartCtx.fillText(`${zeroDeg.toFixed(1)}°`, zx, zy - 10);
@@ -734,16 +738,16 @@ function drawChart() {
   const cx = toX(currentDeg);
   const cy = toY(cf);
 
-  chartCtx.fillStyle = '#fff';
+  chartCtx.fillStyle = '#333';
   chartCtx.beginPath();
   chartCtx.arc(cx, cy, 5, 0, Math.PI * 2);
   chartCtx.fill();
-  chartCtx.strokeStyle = '#e8d5b7';
+  chartCtx.strokeStyle = '#999';
   chartCtx.lineWidth = 1.5;
   chartCtx.stroke();
 
   // Vertical line at current theta
-  chartCtx.strokeStyle = 'rgba(255,255,255,0.2)';
+  chartCtx.strokeStyle = 'rgba(0,0,0,0.15)';
   chartCtx.setLineDash([3, 3]);
   chartCtx.beginPath();
   chartCtx.moveTo(cx, margin.top);
@@ -752,7 +756,7 @@ function drawChart() {
   chartCtx.setLineDash([]);
 
   // Axis labels
-  chartCtx.fillStyle = '#889';
+  chartCtx.fillStyle = '#999';
   chartCtx.font = '10px Georgia';
   chartCtx.textAlign = 'center';
   chartCtx.fillText('0°', toX(0), H - margin.bottom + 14);
