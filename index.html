@@ -104,7 +104,7 @@
   button.active { background: #d0d0c4; border-color: #999; font-weight: 575; }
   #chart-container {
     width: 100%;
-    height: 180px;
+    height: 300px;
     position: relative;
   }
   #chart-canvas {
@@ -197,7 +197,7 @@
       </div>
     </div>
     <div class="panel">
-      <h3>Wobble function $f(\theta)$</h3>
+      <h3>Leg heights $h_i(\theta)$ &amp; wobble $f(\theta)$</h3>
       <div id="chart-container">
         <canvas id="chart-canvas"></canvas>
       </div>
@@ -222,18 +222,46 @@
       but the fourth may hover or dig in. Define the <em>wobble function</em>:
     </p>
     <p style="text-align:center; margin: 10px 0;">
-      $$f(\theta) = (h_A + h_C) - (h_B + h_D)$$
+      $$f(\theta) = \bigl(h_A(\theta) + h_C(\theta)\bigr) - \bigl(h_B(\theta) + h_D(\theta)\bigr)$$
     </p>
     <p>
-      where $h_i$ is the floor height at leg $i$'s position when the table
-      is rotated by angle $\theta$. For a square table, rotating by 90&deg; swaps the diagonal
+      where $h_i(\theta)$ is the floor height at leg $i$'s position when the table
+      is rotated by angle $\theta$. For a square table, rotating by $90°$ swaps the diagonal
       pairs $(A,C)$ and $(B,D)$, so:
     </p>
-    <p style="text-align:center; margin: 10px 0;">
-      $$f(\theta + 90°) = -f(\theta)$$
-    </p>
+    <div style="display: flex; align-items: center; justify-content: center; gap: 32px; margin: 16px 0; flex-wrap: wrap;">
+      <svg viewBox="0 0 200 200" width="160" height="160" style="flex-shrink: 0;">
+        <!-- Square outline -->
+        <rect x="30" y="30" width="140" height="140" fill="none" stroke="#bfbfbf" stroke-width="1.5" rx="2"/>
+        <!-- Diagonals -->
+        <line x1="30" y1="30" x2="170" y2="170" stroke="#c25a4e" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.6"/>
+        <line x1="170" y1="30" x2="30" y2="170" stroke="#4a9a8f" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.6"/>
+        <!-- Leg dots -->
+        <circle cx="170" cy="30" r="10" fill="#c25a4e"/>
+        <circle cx="30" cy="30" r="10" fill="#4a9a8f"/>
+        <circle cx="30" cy="170" r="10" fill="#c49a3a"/>
+        <circle cx="170" cy="170" r="10" fill="#7b6fa0"/>
+        <!-- Labels -->
+        <text x="185" y="35" font-family="EB Garamond, Georgia, serif" font-size="16" fill="#c25a4e" font-weight="575">A</text>
+        <text x="8" y="35" font-family="EB Garamond, Georgia, serif" font-size="16" fill="#4a9a8f" font-weight="575">B</text>
+        <text x="8" y="180" font-family="EB Garamond, Georgia, serif" font-size="16" fill="#c49a3a" font-weight="575">C</text>
+        <text x="185" y="180" font-family="EB Garamond, Georgia, serif" font-size="16" fill="#7b6fa0" font-weight="575">D</text>
+        <!-- Diagonal pair labels -->
+        <text x="100" y="85" font-family="EB Garamond, Georgia, serif" font-size="11" fill="#999" text-anchor="middle">(A,C)</text>
+        <text x="100" y="125" font-family="EB Garamond, Georgia, serif" font-size="11" fill="#999" text-anchor="middle">(B,D)</text>
+        <!-- Rotation arrow -->
+        <path d="M 130 10 A 45 45 0 0 1 167 55" fill="none" stroke="#999" stroke-width="1.2"/>
+        <polygon points="167,55 160,48 163,58" fill="#999"/>
+        <text x="155" y="10" font-family="EB Garamond, Georgia, serif" font-size="11" fill="#999">90°</text>
+      </svg>
+      <div>
+        <p style="text-align:center; margin: 0;">
+          $$f(\theta + 90°) = -f(\theta)$$
+        </p>
+      </div>
+    </div>
     <p>
-      Since $f$ is continuous (the floor is continuous) and changes sign, the
+      Since $f(\theta)$ is continuous (the floor is continuous) and changes sign over $[0°, 90°]$, the
       <em>Intermediate Value Theorem</em> guarantees some $\theta^*$ where
       $f(\theta^*) = 0$ &mdash; all four legs touch the ground.
     </p>
@@ -473,6 +501,11 @@ function computeWobble(theta, R) {
   return (p[0].floorZ + p[2].floorZ) - (p[1].floorZ + p[3].floorZ);
 }
 
+function computeLegHeights(theta, R) {
+  const p = getLegWorldPos(theta, R);
+  return p.map(leg => leg.floorZ);
+}
+
 // Place table: find a rigid placement where we minimize wobble visually.
 // We seat the table so all 4 legs are at the *average* height of the floor
 // at the 4 corners, then tilt to rest on the 3 lowest legs. The 4th hovers.
@@ -623,6 +656,8 @@ function updateTable() {
 const chartCanvas = document.getElementById('chart-canvas');
 const chartCtx = chartCanvas.getContext('2d');
 
+const LEG_CSS_COLORS = ['#c25a4e', '#4a9a8f', '#c49a3a', '#7b6fa0'];
+
 function drawChart() {
   const dpr = window.devicePixelRatio || 1;
   const rect = chartCanvas.getBoundingClientRect();
@@ -638,41 +673,118 @@ function drawChart() {
 
   const R = state.tableRadius;
   const N = 200;
-  const margin = { left: 40, right: 16, top: 16, bottom: 28 };
+  const legendW = 56;
+  const margin = { left: 40, right: legendW + 8, top: 12, bottom: 28 };
+  const gap = 16;
+  const topH = (H - margin.top - margin.bottom - gap) * 0.55;
+  const botH = (H - margin.top - margin.bottom - gap) * 0.45;
   const plotW = W - margin.left - margin.right;
-  const plotH = H - margin.top - margin.bottom;
 
-  // Compute f(theta) for theta in [0, 90]
-  const values = [];
-  let maxAbs = 0;
+  // Compute data
+  const legData = [[], [], [], []]; // h_A, h_B, h_C, h_D
+  const wobbleData = [];
+  let hMin = Infinity, hMax = -Infinity;
+  let maxAbsF = 0;
   for (let i = 0; i <= N; i++) {
     const deg = (i / N) * 90;
     const rad = deg * Math.PI / 180;
-    const f = computeWobble(rad, R);
-    values.push({ deg, f });
-    maxAbs = Math.max(maxAbs, Math.abs(f));
+    const heights = computeLegHeights(rad, R);
+    const f = (heights[0] + heights[2]) - (heights[1] + heights[3]);
+    for (let j = 0; j < 4; j++) {
+      legData[j].push({ deg, h: heights[j] });
+      hMin = Math.min(hMin, heights[j]);
+      hMax = Math.max(hMax, heights[j]);
+    }
+    wobbleData.push({ deg, f });
+    maxAbsF = Math.max(maxAbsF, Math.abs(f));
   }
-  if (maxAbs < 0.01) maxAbs = 0.01;
-  maxAbs *= 1.15;
+  const hRange = Math.max(hMax - hMin, 0.02) * 1.15;
+  const hMid = (hMax + hMin) / 2;
+  if (maxAbsF < 0.01) maxAbsF = 0.01;
+  maxAbsF *= 1.15;
 
   const toX = deg => margin.left + (deg / 90) * plotW;
-  const toY = f => margin.top + plotH / 2 - (f / maxAbs) * (plotH / 2);
+
+  // === TOP SUBPLOT: h_i(θ) ===
+  const topY0 = margin.top;
+  const toYh = h => topY0 + topH / 2 - ((h - hMid) / hRange) * topH;
 
   // Axes
   chartCtx.strokeStyle = '#ccc';
   chartCtx.lineWidth = 1;
   chartCtx.beginPath();
-  chartCtx.moveTo(margin.left, margin.top);
-  chartCtx.lineTo(margin.left, H - margin.bottom);
-  chartCtx.lineTo(W - margin.right, H - margin.bottom);
+  chartCtx.moveTo(margin.left, topY0);
+  chartCtx.lineTo(margin.left, topY0 + topH);
+  chartCtx.lineTo(margin.left + plotW, topY0 + topH);
+  chartCtx.stroke();
+
+  // Draw h_i curves
+  for (let j = 0; j < 4; j++) {
+    chartCtx.strokeStyle = LEG_CSS_COLORS[j];
+    chartCtx.lineWidth = 1.8;
+    chartCtx.beginPath();
+    for (let i = 0; i <= N; i++) {
+      const x = toX(legData[j][i].deg);
+      const y = toYh(legData[j][i].h);
+      if (i === 0) chartCtx.moveTo(x, y); else chartCtx.lineTo(x, y);
+    }
+    chartCtx.stroke();
+  }
+
+  // Current theta dots on h_i curves
+  const currentDeg = state.theta * 180 / Math.PI;
+  const currentHeights = computeLegHeights(state.theta, R);
+  for (let j = 0; j < 4; j++) {
+    const cx = toX(currentDeg);
+    const cy = toYh(currentHeights[j]);
+    chartCtx.fillStyle = LEG_CSS_COLORS[j];
+    chartCtx.beginPath();
+    chartCtx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+    chartCtx.fill();
+  }
+
+  // Top subplot label
+  chartCtx.fillStyle = '#999';
+  chartCtx.font = '10px Georgia';
+  chartCtx.textAlign = 'right';
+  chartCtx.fillText('h(θ)', margin.left - 4, topY0 + 8);
+
+  // Legend (right side)
+  const legendX = margin.left + plotW + 10;
+  const legendLabels = ['h_A', 'h_B', 'h_C', 'h_D'];
+  for (let j = 0; j < 4; j++) {
+    const ly = topY0 + 8 + j * 16;
+    chartCtx.strokeStyle = LEG_CSS_COLORS[j];
+    chartCtx.lineWidth = 2;
+    chartCtx.beginPath();
+    chartCtx.moveTo(legendX, ly);
+    chartCtx.lineTo(legendX + 14, ly);
+    chartCtx.stroke();
+    chartCtx.fillStyle = '#666';
+    chartCtx.font = '10px Georgia';
+    chartCtx.textAlign = 'left';
+    chartCtx.fillText(legendLabels[j], legendX + 18, ly + 3);
+  }
+
+  // === BOTTOM SUBPLOT: f(θ) ===
+  const botY0 = topY0 + topH + gap;
+  const toYf = f => botY0 + botH / 2 - (f / maxAbsF) * (botH / 2);
+
+  // Axes
+  chartCtx.strokeStyle = '#ccc';
+  chartCtx.lineWidth = 1;
+  chartCtx.beginPath();
+  chartCtx.moveTo(margin.left, botY0);
+  chartCtx.lineTo(margin.left, botY0 + botH);
+  chartCtx.lineTo(margin.left + plotW, botY0 + botH);
   chartCtx.stroke();
 
   // Zero line
   chartCtx.strokeStyle = '#ddd';
   chartCtx.setLineDash([4, 4]);
   chartCtx.beginPath();
-  chartCtx.moveTo(margin.left, toY(0));
-  chartCtx.lineTo(W - margin.right, toY(0));
+  chartCtx.moveTo(margin.left, toYf(0));
+  chartCtx.lineTo(margin.left + plotW, toYf(0));
   chartCtx.stroke();
   chartCtx.setLineDash([]);
 
@@ -681,95 +793,96 @@ function drawChart() {
   chartCtx.lineWidth = 2;
   chartCtx.beginPath();
   for (let i = 0; i <= N; i++) {
-    const x = toX(values[i].deg);
-    const y = toY(values[i].f);
+    const x = toX(wobbleData[i].deg);
+    const y = toYf(wobbleData[i].f);
     if (i === 0) chartCtx.moveTo(x, y); else chartCtx.lineTo(x, y);
   }
   chartCtx.stroke();
 
   // Fill positive/negative regions
-  // Positive (above zero line)
   chartCtx.beginPath();
-  chartCtx.moveTo(toX(0), toY(0));
+  chartCtx.moveTo(toX(0), toYf(0));
   for (let i = 0; i <= N; i++) {
-    const x = toX(values[i].deg);
-    const y = Math.min(toY(values[i].f), toY(0));
-    chartCtx.lineTo(x, y);
+    chartCtx.lineTo(toX(wobbleData[i].deg), Math.min(toYf(wobbleData[i].f), toYf(0)));
   }
-  chartCtx.lineTo(toX(90), toY(0));
+  chartCtx.lineTo(toX(90), toYf(0));
   chartCtx.closePath();
   chartCtx.fillStyle = 'rgba(46, 125, 50, 0.1)';
   chartCtx.fill();
 
-  // Negative
   chartCtx.beginPath();
-  chartCtx.moveTo(toX(0), toY(0));
+  chartCtx.moveTo(toX(0), toYf(0));
   for (let i = 0; i <= N; i++) {
-    const x = toX(values[i].deg);
-    const y = Math.max(toY(values[i].f), toY(0));
-    chartCtx.lineTo(x, y);
+    chartCtx.lineTo(toX(wobbleData[i].deg), Math.max(toYf(wobbleData[i].f), toYf(0)));
   }
-  chartCtx.lineTo(toX(90), toY(0));
+  chartCtx.lineTo(toX(90), toYf(0));
   chartCtx.closePath();
   chartCtx.fillStyle = 'rgba(200, 50, 50, 0.1)';
   chartCtx.fill();
 
-  // Mark zero crossings
+  // Zero crossings
   for (let i = 0; i < N; i++) {
-    if (values[i].f * values[i + 1].f < 0) {
-      // Linear interpolation for zero crossing
-      const t = values[i].f / (values[i].f - values[i + 1].f);
-      const zeroDeg = values[i].deg + t * (values[i + 1].deg - values[i].deg);
+    if (wobbleData[i].f * wobbleData[i + 1].f < 0) {
+      const t = wobbleData[i].f / (wobbleData[i].f - wobbleData[i + 1].f);
+      const zeroDeg = wobbleData[i].deg + t * (wobbleData[i + 1].deg - wobbleData[i].deg);
       const zx = toX(zeroDeg);
-      const zy = toY(0);
-
+      const zy = toYf(0);
       chartCtx.fillStyle = '#2e7d32';
       chartCtx.beginPath();
-      chartCtx.arc(zx, zy, 5, 0, Math.PI * 2);
+      chartCtx.arc(zx, zy, 4, 0, Math.PI * 2);
       chartCtx.fill();
-
-      // Label
-      chartCtx.fillStyle = '#2e7d32';
       chartCtx.font = '10px Courier New';
       chartCtx.textAlign = 'center';
-      chartCtx.fillText(`${zeroDeg.toFixed(1)}°`, zx, zy - 10);
+      chartCtx.fillText(`${zeroDeg.toFixed(1)}°`, zx, zy - 8);
     }
   }
 
-  // Current theta marker
-  const currentDeg = state.theta * 180 / Math.PI;
+  // Current theta marker on f(θ)
   const cf = computeWobble(state.theta, R);
   const cx = toX(currentDeg);
-  const cy = toY(cf);
-
+  const cy = toYf(cf);
   chartCtx.fillStyle = '#333';
   chartCtx.beginPath();
-  chartCtx.arc(cx, cy, 5, 0, Math.PI * 2);
+  chartCtx.arc(cx, cy, 4, 0, Math.PI * 2);
   chartCtx.fill();
   chartCtx.strokeStyle = '#999';
   chartCtx.lineWidth = 1.5;
   chartCtx.stroke();
 
-  // Vertical line at current theta
-  chartCtx.strokeStyle = 'rgba(0,0,0,0.15)';
+  // Vertical line at current theta (spanning both subplots)
+  chartCtx.strokeStyle = 'rgba(0,0,0,0.1)';
   chartCtx.setLineDash([3, 3]);
   chartCtx.beginPath();
   chartCtx.moveTo(cx, margin.top);
-  chartCtx.lineTo(cx, H - margin.bottom);
+  chartCtx.lineTo(cx, botY0 + botH);
   chartCtx.stroke();
   chartCtx.setLineDash([]);
 
-  // Axis labels
+  // Bottom subplot labels
   chartCtx.fillStyle = '#999';
   chartCtx.font = '10px Georgia';
-  chartCtx.textAlign = 'center';
-  chartCtx.fillText('0°', toX(0), H - margin.bottom + 14);
-  chartCtx.fillText('45°', toX(45), H - margin.bottom + 14);
-  chartCtx.fillText('90°', toX(90), H - margin.bottom + 14);
-
   chartCtx.textAlign = 'right';
-  chartCtx.fillText('f(θ)', margin.left - 4, margin.top + 4);
-  chartCtx.fillText('0', margin.left - 6, toY(0) + 3);
+  chartCtx.fillText('f(θ)', margin.left - 4, botY0 + 8);
+  chartCtx.fillText('0', margin.left - 6, toYf(0) + 3);
+
+  // X-axis labels (bottom)
+  chartCtx.textAlign = 'center';
+  chartCtx.fillText('0°', toX(0), botY0 + botH + 14);
+  chartCtx.fillText('45°', toX(45), botY0 + botH + 14);
+  chartCtx.fillText('90°', toX(90), botY0 + botH + 14);
+
+  // f(θ) legend
+  const fLegY = botY0 + 8;
+  chartCtx.strokeStyle = '#555';
+  chartCtx.lineWidth = 2;
+  chartCtx.beginPath();
+  chartCtx.moveTo(legendX, fLegY);
+  chartCtx.lineTo(legendX + 14, fLegY);
+  chartCtx.stroke();
+  chartCtx.fillStyle = '#666';
+  chartCtx.font = '10px Georgia';
+  chartCtx.textAlign = 'left';
+  chartCtx.fillText('f(θ)', legendX + 18, fLegY + 3);
 }
 
 // ============================================================
