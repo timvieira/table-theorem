@@ -483,9 +483,7 @@ function updateFloorMesh() {
 updateFloorMesh();
 
 // Grid helper
-const gridHelper = new THREE.GridHelper(FLOOR_SIZE, 20, 0xb0ada6, 0xcccac4);
-gridHelper.position.y = -0.01;
-scene.add(gridHelper);
+// Grid removed — distracting on bumpy terrain
 
 // ============================================================
 // Table
@@ -739,38 +737,48 @@ function updateTable() {
   const isEamesGLB = type.topShape === 'eames' && legs.length === 0;
   const localLegs = type.legs;
 
-  // Foot positions on the floor (where grounded legs touch)
+  // Foot positions (where each leg contacts or would contact the floor plane)
   const footPositions = placement.map(p => new THREE.Vector3(p.worldX, p.tableY, p.worldZ));
 
-  // Compute tabletop plane from the grounded feet
-  // For 3 legs: plane through all 3; for 4: plane through 3 grounded feet
-  let up, right, forward;
+  // Compute up (normal to the foot plane)
+  let up;
   if (numLegs === 3) {
     const v1 = new THREE.Vector3().subVectors(footPositions[1], footPositions[0]);
     const v2 = new THREE.Vector3().subVectors(footPositions[2], footPositions[0]);
     up = new THREE.Vector3().crossVectors(v1, v2).normalize();
-    if (up.y < 0) up.negate();
   } else {
-    // Use the placement foot plane (3 grounded + 1 on the tilted plane)
     const v1 = new THREE.Vector3().subVectors(footPositions[0], footPositions[1]);
     const v2 = new THREE.Vector3().subVectors(footPositions[0], footPositions[numLegs - 1]);
     up = new THREE.Vector3().crossVectors(v2, v1).normalize();
-    if (up.y < 0) up.negate();
+  }
+  if (up.y < 0) up.negate();
+
+  // Top-of-leg positions: offset each foot along the plane normal (not vertical)
+  const topPositions = footPositions.map(fp => fp.clone().addScaledVector(up, LEG_LENGTH));
+
+  // Derive right/forward from topPositions so tabletop aligns with legs
+  let right, forward;
+  if (numLegs >= 4) {
+    right = new THREE.Vector3().subVectors(topPositions[0], topPositions[1]).normalize();
+    forward = new THREE.Vector3().subVectors(topPositions[0], topPositions[numLegs - 1]).normalize();
+    // Re-orthogonalize
+    up = new THREE.Vector3().crossVectors(forward, right).normalize();
+    forward = new THREE.Vector3().crossVectors(right, up).negate().normalize();
+  } else {
+    const v1 = new THREE.Vector3().subVectors(topPositions[1], topPositions[0]);
+    right = v1.normalize();
+    forward = new THREE.Vector3().crossVectors(up, right).normalize();
   }
 
-  // Build orthonormal basis from up + rotation angle
-  const cosT = Math.cos(state.theta);
-  const sinT = Math.sin(state.theta);
-  // Right vector: table's local X axis projected, then orthogonalized
-  let rawRight = new THREE.Vector3(cosT, 0, sinT);
-  right = rawRight.clone().addScaledVector(up, -rawRight.dot(up)).normalize();
-  forward = new THREE.Vector3().crossVectors(up, right).normalize();
+  // Tabletop center
+  const center = new THREE.Vector3();
+  topPositions.forEach(tp => center.add(tp));
+  center.divideScalar(numLegs);
 
-  // Tabletop center: average of foot positions + LEG_LENGTH along up
+  // Foot center (for Eames positioning)
   const footCenter = new THREE.Vector3();
   footPositions.forEach(fp => footCenter.add(fp));
   footCenter.divideScalar(numLegs);
-  const center = footCenter.clone().addScaledVector(up, LEG_LENGTH);
 
   // Set tabletop transform
   const basisMat = new THREE.Matrix4().makeBasis(right, up, forward);
