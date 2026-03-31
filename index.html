@@ -660,71 +660,142 @@ function computeLegHeights(theta, R) {
   return p.map(leg => leg.floorZ);
 }
 
-// Place table: find a rigid placement where we minimize wobble visually.
+// Place a rigid table with legs perpendicular to tabletop.
+// 3 legs touch the floor; the 4th hovers. The tabletop tilts with
+// the floor contact plane, and all geometry is consistent.
 function placeTable(theta, R) {
   const p = getLegWorldPos(theta, R);
   const numLegs = p.length;
+  const localLegs = getCurrentLegs();
+  const half = R / Math.SQRT2;
 
-  // Tripod: all 3 legs always touch — plane through all 3
+  // Floor positions: where each leg's XZ lands on the floor
+  const floorPts = p.map(pi => new THREE.Vector3(pi.x, pi.floorZ, pi.y));
+
+  // Tripod: all 3 legs always touch
   if (numLegs === 3) {
-    return p.map(pi => ({
-      worldX: pi.x,
-      worldZ: pi.y,
-      floorY: pi.floorZ,
-      tableY: pi.floorZ,
-      gap: 0,
-      onGround: true,
+    const v1 = new THREE.Vector3().subVectors(floorPts[1], floorPts[0]);
+    const v2 = new THREE.Vector3().subVectors(floorPts[2], floorPts[0]);
+    let up = new THREE.Vector3().crossVectors(v1, v2).normalize();
+    if (up.y < 0) up.negate();
+    const right = v1.clone().normalize();
+    const forward = new THREE.Vector3().crossVectors(up, right).normalize();
+
+    const result = p.map((pi, i) => ({
+      worldX: pi.x, worldZ: pi.y,
+      floorY: pi.floorZ, foot: floorPts[i],
+      gap: 0, onGround: true,
     }));
+    const footCenter = new THREE.Vector3();
+    floorPts.forEach(f => footCenter.add(f));
+    footCenter.divideScalar(3);
+    result.rigid = { up, right, forward,
+      tabCenter: footCenter.clone().addScaledVector(up, LEG_LENGTH) };
+    return result;
   }
 
-  // 4-leg case: find which 3 legs sit on floor, 4th hovers
+  // 4-leg case: for each triplet, compute the rigid body placement
   let bestConfig = null;
 
   for (let skip = 0; skip < 4; skip++) {
-    const idx = [0,1,2,3].filter(i => i !== skip);
-    const pts = idx.map(i => new THREE.Vector3(p[i].x, p[i].floorZ, p[i].y));
+    const grounded = [0,1,2,3].filter(i => i !== skip);
+    const gpts = grounded.map(i => floorPts[i]);
 
-    const v1 = new THREE.Vector3().subVectors(pts[1], pts[0]);
-    const v2 = new THREE.Vector3().subVectors(pts[2], pts[0]);
-    const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
+    // Floor plane normal from the 3 grounded contact points
+    const fv1 = new THREE.Vector3().subVectors(gpts[1], gpts[0]);
+    const fv2 = new THREE.Vector3().subVectors(gpts[2], gpts[0]);
+    let up = new THREE.Vector3().crossVectors(fv1, fv2).normalize();
+    if (up.y < 0) up.negate();
 
-    const d = -normal.dot(pts[0]);
-    const p4world = new THREE.Vector3(p[skip].x, 0, p[skip].y);
-    if (Math.abs(normal.y) < 1e-10) continue;
-    const tableY4 = -(normal.x * p4world.x + normal.z * p4world.z + d) / normal.y;
-    const gap = tableY4 - p[skip].floorZ;
+    // Build tabletop axes from the grounded leg positions
+    // right = direction from leg 1 to leg 0 among grounded, projected onto tabletop plane
+    const groundedTops = gpts.map(g => g.clone().addScaledVector(up, LEG_LENGTH));
+    // Use first two grounded legs for right direction
+    let right = new THREE.Vector3().subVectors(groundedTops[0], groundedTops[1]).normalize();
+    let forward = new THREE.Vector3().crossVectors(right, up).negate().normalize();
 
-    if (gap >= -1e-6) {
+    // Tabletop center from grounded tops
+    const tabCenter = new THREE.Vector3();
+    groundedTops.forEach(t => tabCenter.add(t));
+    tabCenter.divideScalar(3);
+    // Adjust: center should be centroid of ALL 4 tops, not just 3.
+    // Compute 4th leg top from rigid body geometry:
+    const sl = localLegs[skip];
+    const skipLocalOffset = new THREE.Vector3()
+      .addScaledVector(right, sl[0] * half)
+      .addScaledVector(forward, sl[1] * half);
+    // We need the centroid of all 4 legs, so compute the 4th top
+    // relative to the 3 grounded tops. Use the centroid of grounded legs
+    // in local space to find the true center.
+    // Simpler: compute all 4 tops directly.
+    const allTops = [];
+    const allFeet = [];
+    for (let i = 0; i < 4; i++) {
+      const ll = localLegs[i];
+      const localOff = new THREE.Vector3()
+        .addScaledVector(right, ll[0] * half)
+        .addScaledVector(forward, ll[1] * half);
+      // For grounded legs, the foot is on the floor and top = foot + LEG_LENGTH*up
+      // For the skipped leg, we derive from the rigid body
+      if (i === skip) {
+        // Top position relative to a grounded leg's top:
+        // top_skip = top_grounded[0] + (localOff_skip - localOff_grounded[0])
+        const ref = grounded[0];
+        const refLL = localLegs[ref];
+        const refLocalOff = new THREE.Vector3()
+          .addScaledVector(right, refLL[0] * half)
+          .addScaledVector(forward, refLL[1] * half);
+        const top = groundedTops[0].clone().add(localOff).sub(refLocalOff);
+        const foot = top.clone().addScaledVector(up, -LEG_LENGTH);
+        allTops.push(top);
+        allFeet.push(foot);
+      } else {
+        const gIdx = grounded.indexOf(i);
+        allTops.push(groundedTops[gIdx]);
+        allFeet.push(gpts[gIdx]);
+      }
+    }
+
+    const gap = allFeet[skip].y - p[skip].floorZ;
+    if (gap >= -1e-4) {
       if (!bestConfig || gap < bestConfig.gap) {
-        bestConfig = { skip, idx, pts, normal, d, gap, tableY4 };
+        const center4 = new THREE.Vector3();
+        allTops.forEach(t => center4.add(t));
+        center4.divideScalar(4);
+        bestConfig = { skip, gap, up, right, forward, tabCenter: center4, allFeet, allTops };
       }
     }
   }
 
   if (!bestConfig) {
-    bestConfig = { skip: 3, idx: [0,1,2], pts: null, gap: 0 };
+    // Fallback
+    const up = new THREE.Vector3(0, 1, 0);
+    const right = new THREE.Vector3(1, 0, 0);
+    const forward = new THREE.Vector3(0, 0, -1);
+    const center = new THREE.Vector3();
+    floorPts.forEach(f => center.add(f));
+    center.divideScalar(4).addScaledVector(up, LEG_LENGTH);
+    bestConfig = { skip: -1, gap: 0, up, right, forward, tabCenter: center,
+      allFeet: floorPts, allTops: floorPts.map(f => f.clone().addScaledVector(up, LEG_LENGTH)) };
   }
 
   const result = [];
-  const { skip } = bestConfig;
   for (let i = 0; i < 4; i++) {
-    const floorY = p[i].floorZ;
-    let tableY;
-    if (i === skip) {
-      tableY = bestConfig.tableY4;
-    } else {
-      tableY = floorY;
-    }
     result.push({
-      worldX: p[i].x,
-      worldZ: p[i].y,
-      floorY,
-      tableY,
-      gap: tableY - floorY,
-      onGround: i !== skip,
+      worldX: p[i].x, worldZ: p[i].y,
+      floorY: p[i].floorZ,
+      foot: bestConfig.allFeet[i],
+      top: bestConfig.allTops[i],
+      gap: Math.max(0, bestConfig.allFeet[i].y - p[i].floorZ),
+      onGround: i !== bestConfig.skip,
     });
   }
-
+  result.rigid = {
+    up: bestConfig.up,
+    right: bestConfig.right,
+    forward: bestConfig.forward,
+    tabCenter: bestConfig.tabCenter,
+  };
   return result;
 }
 
@@ -735,60 +806,21 @@ function updateTable() {
   const placement = placeTable(state.theta, R);
   const numLegs = placement.length;
   const isEamesGLB = type.topShape === 'eames' && legs.length === 0;
-  const localLegs = type.legs;
-
-  // Foot positions (where each leg contacts or would contact the floor plane)
-  const footPositions = placement.map(p => new THREE.Vector3(p.worldX, p.tableY, p.worldZ));
-
-  // Compute up (normal to the foot plane)
-  let up;
-  if (numLegs === 3) {
-    const v1 = new THREE.Vector3().subVectors(footPositions[1], footPositions[0]);
-    const v2 = new THREE.Vector3().subVectors(footPositions[2], footPositions[0]);
-    up = new THREE.Vector3().crossVectors(v1, v2).normalize();
-  } else {
-    const v1 = new THREE.Vector3().subVectors(footPositions[0], footPositions[1]);
-    const v2 = new THREE.Vector3().subVectors(footPositions[0], footPositions[numLegs - 1]);
-    up = new THREE.Vector3().crossVectors(v2, v1).normalize();
-  }
-  if (up.y < 0) up.negate();
-
-  // Top-of-leg positions: offset each foot along the plane normal (not vertical)
-  const topPositions = footPositions.map(fp => fp.clone().addScaledVector(up, LEG_LENGTH));
-
-  // Derive right/forward from topPositions so tabletop aligns with legs
-  let right, forward;
-  if (numLegs >= 4) {
-    right = new THREE.Vector3().subVectors(topPositions[0], topPositions[1]).normalize();
-    forward = new THREE.Vector3().subVectors(topPositions[0], topPositions[numLegs - 1]).normalize();
-    // Re-orthogonalize
-    up = new THREE.Vector3().crossVectors(forward, right).normalize();
-    forward = new THREE.Vector3().crossVectors(right, up).negate().normalize();
-  } else {
-    const v1 = new THREE.Vector3().subVectors(topPositions[1], topPositions[0]);
-    right = v1.normalize();
-    forward = new THREE.Vector3().crossVectors(up, right).normalize();
-  }
-
-  // Tabletop center
-  const center = new THREE.Vector3();
-  topPositions.forEach(tp => center.add(tp));
-  center.divideScalar(numLegs);
-
-  // Foot center (for Eames positioning)
-  const footCenter = new THREE.Vector3();
-  footPositions.forEach(fp => footCenter.add(fp));
-  footCenter.divideScalar(numLegs);
+  const { up, right, forward, tabCenter } = placement.rigid;
 
   // Set tabletop transform
   const basisMat = new THREE.Matrix4().makeBasis(right, up, forward);
   if (isEamesGLB) {
+    // Eames: position at foot centroid, uniform scale
+    const footCenter = new THREE.Vector3();
+    placement.forEach(p => footCenter.add(p.foot));
+    footCenter.divideScalar(numLegs);
     tabletop.position.copy(footCenter);
     tabletop.setRotationFromMatrix(basisMat);
     const span = half * 2 * 1.4;
     tabletop.scale.set(span, span, span);
   } else {
-    tabletop.position.copy(center);
+    tabletop.position.copy(tabCenter);
     tabletop.setRotationFromMatrix(basisMat);
     if (numLegs >= 4) {
       tabletop.scale.set(half * 2 * type.topAspect[0], 1, half * 2 * type.topAspect[1]);
@@ -797,26 +829,18 @@ function updateTable() {
     }
   }
 
-  // Rigid legs: compute from tabletop corners
-  tabletop.updateMatrixWorld(true);
+  // Rigid legs: use foot/top positions computed by placeTable
   const legQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), up);
   for (let i = 0; i < legs.length; i++) {
-    // Tabletop corner in local space (±0.5)
-    const aspectX = numLegs >= 4 ? type.topAspect[0] : 1;
-    const aspectZ = numLegs >= 4 ? (type.topAspect[1] || 1) : 1;
-    const lx = localLegs[i][0] / (2 * aspectX);
-    const lz = localLegs[i][1] / (2 * aspectZ);
-    // Transform to world space via tabletop matrix
-    const attachPt = new THREE.Vector3(lx, -0.03, lz).applyMatrix4(tabletop.matrixWorld);
-    const rigidFoot = attachPt.clone().addScaledVector(up, -LEG_LENGTH);
-
-    const mid = new THREE.Vector3().addVectors(attachPt, rigidFoot).multiplyScalar(0.5);
+    const foot = placement[i].foot;
+    const top = placement[i].top;
+    const mid = new THREE.Vector3().addVectors(foot, top).multiplyScalar(0.5);
     legs[i].position.copy(mid);
     legs[i].scale.set(1, LEG_LENGTH, 1);
     legs[i].setRotationFromQuaternion(legQuat);
 
     // Foot sphere
-    legTouchSpheres[i].position.copy(rigidFoot);
+    legTouchSpheres[i].position.copy(foot);
     const isHovering = placement[i].gap > 0.005;
     legTouchSpheres[i].material.emissive = new THREE.Color(isHovering ? 0x442200 : 0x004400);
     legTouchSpheres[i].material.emissiveIntensity = isHovering ? 0.8 : 0.5;
@@ -824,7 +848,7 @@ function updateTable() {
 
     // Gap line from rigid foot down to floor
     const floorPt = new THREE.Vector3(placement[i].worldX, placement[i].floorY, placement[i].worldZ);
-    gapLines[i].geometry.setFromPoints([floorPt, rigidFoot]);
+    gapLines[i].geometry.setFromPoints([floorPt, foot]);
     gapLines[i].computeLineDistances();
     gapLines[i].visible = isHovering;
   }
