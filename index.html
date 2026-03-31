@@ -781,13 +781,21 @@ function updateTable() {
     }
   }
 
-  // Rigid legs: all perpendicular to tabletop (along -up direction)
-  const legDir = up.clone(); // tabletop normal = leg direction
+  // Rigid legs: attach to tabletop corners, hang perpendicular to tabletop
+  // Compute world-space attachment points from the tabletop's transform
+  tabletop.updateMatrixWorld(true);
+  const localLegs = type.legs;
+  const legDir = up.clone();
   const legQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), legDir);
   for (let i = 0; i < legs.length; i++) {
-    const top = topPositions[i];
-    const rigidFoot = top.clone().addScaledVector(up, -LEG_LENGTH);
-    const mid = new THREE.Vector3().addVectors(top, rigidFoot).multiplyScalar(0.5);
+    // Local corner on bottom of tabletop, normalized to ±0.5
+    const lx = localLegs[i][0] / (2 * type.topAspect[0]);
+    const lz = localLegs[i][1] / (2 * (type.topAspect[1] || 1));
+    const localCorner = new THREE.Vector3(lx, -0.03, lz);
+    const attachPt = localCorner.applyMatrix4(tabletop.matrixWorld);
+
+    const rigidFoot = attachPt.clone().addScaledVector(up, -LEG_LENGTH);
+    const mid = new THREE.Vector3().addVectors(attachPt, rigidFoot).multiplyScalar(0.5);
     legs[i].position.copy(mid);
     legs[i].scale.set(1, LEG_LENGTH, 1);
     legs[i].setRotationFromQuaternion(legQuat);
