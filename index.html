@@ -383,11 +383,11 @@ const TABLE_TYPES = {
   },
   eames: {
     name: 'Eames chair',
-    legs: [[+1,+1], [-1,+1], [-1,-1], [+1,-1]],
+    legs: [[+1.15,+1.15], [-1.15,+1.15], [-1.15,-1.15], [+1.15,-1.15]],
     labels: ['A','B','C','D'],
     topShape: 'eames',
     topAspect: [1, 1],
-    topColor: 0x2a2a2a,
+    topColor: 0xf0ece4,
     theoremApplies: true,
     desc: 'Square base — the theorem applies to any four-footed object.',
   },
@@ -517,25 +517,40 @@ function buildTable(typeId) {
   if (type.topShape === 'circle') {
     topGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.06, 32);
   } else if (type.topShape === 'eames') {
-    topGeo = new THREE.SphereGeometry(0.55, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.45);
-    topGeo.scale(1, 0.25, 1);
-    topGeo.translate(0, -0.02, 0);
+    // Eames DSW-style molded shell seat using a LatheGeometry profile
+    // Profile: curved bucket seat cross-section
+    const profile = [];
+    const steps = 20;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps; // 0 = center bottom, 1 = rim
+      const r = 0.55 * Math.pow(t, 0.6); // radius flares outward
+      const y = -0.12 * (1 - t) * (1 - t) + 0.15 * t * t; // scooped bottom, raised rim
+      profile.push(new THREE.Vector2(r, y));
+    }
+    topGeo = new THREE.LatheGeometry(profile, 32);
+    // Elongate slightly front-to-back and squash for shell proportion
+    topGeo.scale(0.9, 1, 1.1);
   } else {
     topGeo = new THREE.BoxGeometry(1, 0.06, 1);
   }
   const topMat = new THREE.MeshStandardMaterial({
     color: type.topColor,
-    roughness: type.topShape === 'eames' ? 0.3 : 0.6,
-    metalness: type.topShape === 'eames' ? 0.4 : 0.15,
+    roughness: type.topShape === 'eames' ? 0.7 : 0.6,
+    metalness: type.topShape === 'eames' ? 0.05 : 0.15,
+    ...(type.topShape === 'eames' ? { side: THREE.DoubleSide } : {}),
   });
   tabletop = new THREE.Mesh(topGeo, topMat);
   tabletop.castShadow = true;
   tableGroup.add(tabletop);
 
   // Legs
-  const legGeo = new THREE.CylinderGeometry(0.03, 0.03, 1, 8);
+  const isEames = type.topShape === 'eames';
+  const legGeo = isEames
+    ? new THREE.CylinderGeometry(0.025, 0.035, 1, 8) // tapered dowel
+    : new THREE.CylinderGeometry(0.03, 0.03, 1, 8);
   for (let i = 0; i < numLegs; i++) {
-    const legMat = new THREE.MeshStandardMaterial({ color: LEG_COLORS[i], roughness: 0.5 });
+    const legColor = isEames ? 0x8B6914 : LEG_COLORS[i]; // wooden dowels for Eames
+    const legMat = new THREE.MeshStandardMaterial({ color: legColor, roughness: isEames ? 0.7 : 0.5 });
     const leg = new THREE.Mesh(legGeo, legMat);
     leg.castShadow = true;
     tableGroup.add(leg);
