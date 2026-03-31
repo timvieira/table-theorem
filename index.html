@@ -495,6 +495,7 @@ let tabletop = null;
 let legs = [];
 let legTouchSpheres = [];
 let gapLines = [];
+let eiffelStruts = [];
 
 function buildTable(typeId) {
   const type = TABLE_TYPES[typeId];
@@ -508,28 +509,52 @@ function buildTable(typeId) {
   });
   legTouchSpheres.forEach(s => { s.geometry?.dispose(); s.material?.dispose(); scene.remove(s); });
   gapLines.forEach(l => { l.geometry?.dispose(); l.material?.dispose(); scene.remove(l); });
+  eiffelStruts.forEach(s => { s.mesh.geometry?.dispose(); s.mesh.material?.dispose(); scene.remove(s.mesh); });
   legs = [];
   legTouchSpheres = [];
   gapLines = [];
+  eiffelStruts = [];
 
   // Tabletop
   let topGeo;
   if (type.topShape === 'circle') {
     topGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.06, 32);
   } else if (type.topShape === 'eames') {
-    // Eames DSW-style molded shell seat using a LatheGeometry profile
-    // Profile: curved bucket seat cross-section
-    const profile = [];
-    const steps = 20;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps; // 0 = center bottom, 1 = rim
-      const r = 0.55 * Math.pow(t, 0.6); // radius flares outward
-      const y = -0.12 * (1 - t) * (1 - t) + 0.15 * t * t; // scooped bottom, raised rim
-      profile.push(new THREE.Vector2(r, y));
+    // Eames DSR shell chair — molded seat with tall curved backrest
+    // Built from a deformed PlaneGeometry
+    topGeo = new THREE.PlaneGeometry(1, 1.3, 20, 28);
+    const pos = topGeo.attributes.position;
+    for (let idx = 0; idx < pos.count; idx++) {
+      let px = pos.getX(idx); // -0.5 to 0.5 (left-right)
+      let py = pos.getY(idx); // -0.65 to 0.65 (front-to-back/up)
+      const v = (py + 0.65) / 1.3; // 0 = front edge, 1 = top of backrest
+
+      let nx, ny, nz;
+      if (v < 0.4) {
+        // Seat: mostly flat with scoop
+        const s = v / 0.4;
+        nx = px * (0.42 + 0.06 * s);
+        nz = (s - 0.6) * 0.35;
+        ny = 0.025 * (1 - Math.cos(s * Math.PI)) + 0.015 * Math.cos(px * 3.14);
+      } else {
+        // Backrest: curves upward and slightly backward
+        const b = (v - 0.4) / 0.6;
+        const angle = b * 1.25; // ~72 degrees of curve
+        nx = px * (0.48 + 0.06 * Math.sin(b * Math.PI));
+        nz = 0.35 * 0.4 - 0.05 + Math.sin(angle) * 0.06;
+        ny = 0.05 + b * 0.5;
+        // Concavity in the back
+        ny += 0.02 * (px * px * 4);
+      }
+      // Rounded corners: taper edges
+      const edgeSoftness = Math.max(0, 1 - Math.pow(Math.abs(px) * 2.3, 4));
+      ny *= edgeSoftness > 0 ? 1 : 0.95;
+
+      pos.setX(idx, nx);
+      pos.setY(idx, ny);
+      pos.setZ(idx, nz);
     }
-    topGeo = new THREE.LatheGeometry(profile, 32);
-    // Elongate slightly front-to-back and squash for shell proportion
-    topGeo.scale(0.9, 1, 1.1);
+    topGeo.computeVertexNormals();
   } else {
     topGeo = new THREE.BoxGeometry(1, 0.06, 1);
   }
@@ -546,18 +571,26 @@ function buildTable(typeId) {
   // Legs
   const isEames = type.topShape === 'eames';
   const legGeo = isEames
-    ? new THREE.CylinderGeometry(0.025, 0.035, 1, 8) // tapered dowel
+    ? new THREE.CylinderGeometry(0.015, 0.015, 1, 6) // thin metal rod
     : new THREE.CylinderGeometry(0.03, 0.03, 1, 8);
   for (let i = 0; i < numLegs; i++) {
-    const legColor = isEames ? 0x8B6914 : LEG_COLORS[i]; // wooden dowels for Eames
-    const legMat = new THREE.MeshStandardMaterial({ color: legColor, roughness: isEames ? 0.7 : 0.5 });
+    const legColor = isEames ? 0xcccccc : LEG_COLORS[i];
+    const legMat = new THREE.MeshStandardMaterial({
+      color: legColor,
+      roughness: isEames ? 0.15 : 0.5,
+      metalness: isEames ? 0.8 : 0,
+    });
     const leg = new THREE.Mesh(legGeo, legMat);
     leg.castShadow = true;
     tableGroup.add(leg);
     legs.push(leg);
 
-    const sphereGeo = new THREE.SphereGeometry(0.06, 12, 12);
-    const sphere = new THREE.Mesh(sphereGeo, legMat.clone());
+    const footRadius = isEames ? 0.035 : 0.06;
+    const sphereGeo = new THREE.SphereGeometry(footRadius, 12, 12);
+    const footMat = isEames
+      ? new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 })
+      : legMat.clone();
+    const sphere = new THREE.Mesh(sphereGeo, footMat);
     scene.add(sphere);
     legTouchSpheres.push(sphere);
   }
@@ -578,6 +611,21 @@ function buildTable(typeId) {
     line.computeLineDistances();
     scene.add(line);
     gapLines.push(line);
+  }
+
+  // Eiffel base cross-braces
+  eiffelStruts = [];
+  if (isEames && numLegs === 4) {
+    const strutMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.15, metalness: 0.8 });
+    const strutGeo = new THREE.CylinderGeometry(0.008, 0.008, 1, 4);
+    // 4 horizontal braces (connecting adjacent legs at ~40% height)
+    // + 2 diagonal cross braces
+    const strutPairs = [[0,1],[1,2],[2,3],[3,0],[0,2],[1,3]];
+    for (const pair of strutPairs) {
+      const strut = new THREE.Mesh(strutGeo, strutMat);
+      scene.add(strut);
+      eiffelStruts.push({ mesh: strut, from: pair[0], to: pair[1] });
+    }
   }
 
   // Update leg indicators HTML
@@ -754,6 +802,25 @@ function updateTable() {
     gapLines[i].geometry.setFromPoints([floorPt, foot]);
     gapLines[i].computeLineDistances();
     gapLines[i].visible = isHovering;
+  }
+
+  // Update Eiffel cross-braces
+  for (const strut of eiffelStruts) {
+    const footA = new THREE.Vector3(placement[strut.from].worldX, placement[strut.from].tableY, placement[strut.from].worldZ);
+    const topA = topPositions[strut.from];
+    const footB = new THREE.Vector3(placement[strut.to].worldX, placement[strut.to].tableY, placement[strut.to].worldZ);
+    const topB = topPositions[strut.to];
+    // Place strut at 35% height between feet and tops
+    const ptA = new THREE.Vector3().lerpVectors(footA, topA, 0.35);
+    const ptB = new THREE.Vector3().lerpVectors(footB, topB, 0.35);
+    const mid = new THREE.Vector3().addVectors(ptA, ptB).multiplyScalar(0.5);
+    const dir = new THREE.Vector3().subVectors(ptB, ptA);
+    const len = dir.length();
+    dir.normalize();
+    strut.mesh.position.copy(mid);
+    strut.mesh.scale.set(1, len, 1);
+    const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
+    strut.mesh.setRotationFromQuaternion(quat);
   }
 
   // Update leg status display
