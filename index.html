@@ -293,6 +293,11 @@
       <a href="https://arxiv.org/abs/math/0511490" style="color:#666;">"Mathematical Table Turning Revisited"</a> (2005).
       The full theorem requires a Lipschitz condition (floor slope &le; ~35&deg;) and sufficient leg length.
     </p>
+    <p style="margin-top: 6px; font-size: 0.82em; color: #999;">
+      Eames chair 3D model:
+      <a href="https://skfb.ly/ULPo" style="color:#666;">"Vitra Eames Plastic Chair"</a> by furnny,
+      licensed under <a href="http://creativecommons.org/licenses/by/4.0/" style="color:#666;">CC BY 4.0</a>.
+    </p>
   </div>
 </div>
 
@@ -316,6 +321,7 @@ MathJax = {
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ============================================================
 // Floor generation — sum of random sinusoids
@@ -487,6 +493,19 @@ scene.add(gridHelper);
 const LEG_COLORS = [0xc25a4e, 0x4a9a8f, 0xc49a3a, 0x7b6fa0]; // A, B, C, D
 const LEG_LENGTH = 1.0;
 
+// Preload Eames chair model (CC-BY furnny via Sketchfab)
+let eamesModel = null;
+new GLTFLoader().load('vitra_eames_plastic_chair.glb', (gltf) => {
+  const model = gltf.scene;
+  // Model is ~0.63 wide x 1.09 tall x 0.72 deep, bottom at y≈0
+  // Normalize so height = 1 (we'll scale to match LEG_LENGTH + tabletop later)
+  const s = 1.0 / 1.09;
+  model.scale.set(s, s, s);
+  model.traverse(child => { if (child.isMesh) child.castShadow = true; });
+  eamesModel = model;
+  if (state.tableType === 'eames') buildTable('eames');
+});
+
 
 // Table group
 const tableGroup = new THREE.Group();
@@ -521,69 +540,15 @@ function buildTable(typeId) {
   if (type.topShape === 'circle') {
     topGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.06, 32);
   } else if (type.topShape === 'eames') {
-    // Eames DSR shell chair — built as a group with shell + wire base
-    const chairGroup = new THREE.Group();
-
-    // Shell: open-front bucket shape using BufferGeometry
-    // We sweep a curved profile around a partial arc (270 degrees — open at front)
-    const shellVerts = [];
-    const shellIdx = [];
-    const cols = 24;  // around the arc
-    const rows = 12;  // up the shell height
-    const shellH = 0.55; // total shell height
-    const arcSpan = Math.PI * 1.5; // 270 degrees (open at front)
-    const arcStart = Math.PI * 0.25; // start angle
-
-    for (let j = 0; j <= rows; j++) {
-      const v = j / rows; // 0 = bottom rim, 1 = top rim
-      const radius = 0.32 + 0.12 * v; // wider at top
-      const y = v * shellH;
-      for (let i = 0; i <= cols; i++) {
-        const u = i / cols;
-        const angle = arcStart + u * arcSpan;
-        const x = Math.cos(angle) * radius;
-        const z = Math.sin(angle) * radius;
-        shellVerts.push(x, y, z);
-      }
+    // Use loaded Vitra Eames Plastic Chair GLB
+    if (eamesModel) {
+      tabletop = eamesModel.clone();
+      tableGroup.add(tabletop);
+    } else {
+      // Fallback while loading
+      topGeo = new THREE.BoxGeometry(1, 0.06, 1);
     }
-    for (let j = 0; j < rows; j++) {
-      for (let i = 0; i < cols; i++) {
-        const a = j * (cols + 1) + i;
-        const b = a + 1;
-        const c = a + (cols + 1);
-        const d = c + 1;
-        shellIdx.push(a, c, b, b, c, d);
-      }
-    }
-    // Bottom cap (seat)
-    const centerIdx = shellVerts.length / 3;
-    shellVerts.push(0, 0.02, 0); // center of seat, slightly above bottom
-    for (let i = 0; i < cols; i++) {
-      shellIdx.push(centerIdx, i + 1, i);
-    }
-
-    const shellGeo = new THREE.BufferGeometry();
-    shellGeo.setAttribute('position', new THREE.Float32BufferAttribute(shellVerts, 3));
-    shellGeo.setIndex(shellIdx);
-    shellGeo.computeVertexNormals();
-
-    const shellMat = new THREE.MeshStandardMaterial({
-      color: 0xf0ece4,
-      roughness: 0.6,
-      metalness: 0.05,
-      side: THREE.DoubleSide,
-    });
-    const shell = new THREE.Mesh(shellGeo, shellMat);
-    shell.castShadow = true;
-    // Tilt back slightly
-    shell.rotation.x = -0.1;
-    shell.position.y = 0.02;
-    chairGroup.add(shell);
-
-    tabletop = chairGroup;
-    tabletop.castShadow = true;
-    tableGroup.add(tabletop);
-    topGeo = null;
+    if (!topGeo) topGeo = null; // skip generic tabletop creation
   } else {
     topGeo = new THREE.BoxGeometry(1, 0.06, 1);
   }
@@ -598,35 +563,26 @@ function buildTable(typeId) {
     tableGroup.add(tabletop);
   }
 
-  // Legs
-  const isEames = type.topShape === 'eames';
-  const legGeo = isEames
-    ? new THREE.CylinderGeometry(0.012, 0.012, 1, 6)
-    : new THREE.CylinderGeometry(0.03, 0.03, 1, 8);
-  for (let i = 0; i < numLegs; i++) {
-    const legColor = isEames ? 0xcccccc : LEG_COLORS[i];
-    const legMat = new THREE.MeshStandardMaterial({
-      color: legColor,
-      roughness: isEames ? 0.15 : 0.5,
-      metalness: isEames ? 0.8 : 0,
-    });
-    const leg = new THREE.Mesh(legGeo, legMat);
-    leg.castShadow = true;
-    tableGroup.add(leg);
-    legs.push(leg);
+  // Legs (skip for eames — the GLB model has its own)
+  const isEames = type.topShape === 'eames' && eamesModel;
+  if (!isEames) {
+    const legGeo = new THREE.CylinderGeometry(0.03, 0.03, 1, 8);
+    for (let i = 0; i < numLegs; i++) {
+      const legMat = new THREE.MeshStandardMaterial({ color: LEG_COLORS[i], roughness: 0.5 });
+      const leg = new THREE.Mesh(legGeo, legMat);
+      leg.castShadow = true;
+      tableGroup.add(leg);
+      legs.push(leg);
 
-    const footR = isEames ? 0.03 : 0.06;
-    const sphereGeo = new THREE.SphereGeometry(footR, 12, 12);
-    const footMat = isEames
-      ? new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 })
-      : legMat.clone();
-    const sphere = new THREE.Mesh(sphereGeo, footMat);
-    scene.add(sphere);
-    legTouchSpheres.push(sphere);
+      const sphereGeo = new THREE.SphereGeometry(0.06, 12, 12);
+      const sphere = new THREE.Mesh(sphereGeo, legMat.clone());
+      scene.add(sphere);
+      legTouchSpheres.push(sphere);
+    }
   }
 
-  // Gap lines
-  {
+  // Gap lines (skip for eames)
+  if (!isEames) {
     for (let i = 0; i < numLegs; i++) {
       const mat = new THREE.LineDashedMaterial({
         color: LEG_COLORS[i],
@@ -647,7 +603,7 @@ function buildTable(typeId) {
 
   // Eiffel base cross-braces (only for eames fallback without GLB)
   eiffelStruts = [];
-  if (isEames && numLegs === 4) {
+  if (false && isEames && numLegs === 4) { // disabled — GLB has its own base
     const strutMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.15, metalness: 0.8 });
     const strutGeo = new THREE.CylinderGeometry(0.008, 0.008, 1, 4);
     // 4 horizontal braces (connecting adjacent legs at ~40% height)
@@ -788,15 +744,31 @@ function updateTable() {
   topPositions.forEach(tp => center.add(tp));
   center.divideScalar(numLegs);
 
+  const isEamesGLB = type.topShape === 'eames' && legs.length === 0;
+
   // Tabletop orientation
   if (numLegs >= 4) {
     const right = new THREE.Vector3().subVectors(topPositions[0], topPositions[1]).normalize();
     const forward = new THREE.Vector3().subVectors(topPositions[0], topPositions[numLegs - 1]).normalize();
     const up = new THREE.Vector3().crossVectors(forward, right).normalize();
-    tabletop.position.copy(center);
-    const mat4 = new THREE.Matrix4().makeBasis(right, up, forward);
-    tabletop.setRotationFromMatrix(mat4);
-    tabletop.scale.set(half * 2 * type.topAspect[0], 1, half * 2 * type.topAspect[1]);
+
+    if (isEamesGLB) {
+      // GLB model: position at foot centroid, scale uniformly to match leg span
+      const footCenter = new THREE.Vector3();
+      placement.forEach(p => footCenter.add(new THREE.Vector3(p.worldX, p.tableY, p.worldZ)));
+      footCenter.divideScalar(numLegs);
+      tabletop.position.copy(footCenter);
+      const mat4 = new THREE.Matrix4().makeBasis(right, up, forward);
+      tabletop.setRotationFromMatrix(mat4);
+      // The normalized model is ~1 unit tall; scale to match leg spread
+      const span = half * 2 * 1.4; // scale factor to fill the footprint
+      tabletop.scale.set(span, span, span);
+    } else {
+      tabletop.position.copy(center);
+      const mat4 = new THREE.Matrix4().makeBasis(right, up, forward);
+      tabletop.setRotationFromMatrix(mat4);
+      tabletop.scale.set(half * 2 * type.topAspect[0], 1, half * 2 * type.topAspect[1]);
+    }
   } else {
     // Tripod: compute plane from 3 points
     const v1 = new THREE.Vector3().subVectors(topPositions[1], topPositions[0]);
@@ -811,8 +783,8 @@ function updateTable() {
     tabletop.scale.set(half * 2, 1, half * 2);
   }
 
-  // Set legs
-  for (let i = 0; i < numLegs; i++) {
+  // Set legs (skip for eames GLB — model has its own)
+  for (let i = 0; i < legs.length; i++) {
     const foot = new THREE.Vector3(placement[i].worldX, placement[i].tableY, placement[i].worldZ);
     const top = topPositions[i];
     const mid = new THREE.Vector3().addVectors(foot, top).multiplyScalar(0.5);
