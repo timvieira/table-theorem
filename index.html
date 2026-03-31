@@ -44,7 +44,7 @@
     height: 480px;
     border-radius: 4px;
     overflow: hidden;
-    background: #f0f0ea;
+    background: #f5f5ef;
     border: 1px solid #ddd;
     cursor: grab;
   }
@@ -125,6 +125,7 @@
     padding: 4px 8px;
     border-radius: 4px;
     background: #e8e8e2;
+    min-width: 110px;
   }
   .leg-dot {
     width: 10px;
@@ -134,6 +135,9 @@
   .leg-gap {
     font-family: Menlo, Monaco, 'Courier New', monospace;
     font-size: 0.8em;
+    display: inline-block;
+    min-width: 5.5em;
+    text-align: right;
   }
   #explanation {
     max-width: 1020px;
@@ -201,10 +205,10 @@
     <div class="panel">
       <h3>Leg status</h3>
       <div id="leg-indicators">
-        <div class="leg-indicator"><div class="leg-dot" style="background:#ff6b6b"></div>A <span class="leg-gap" id="gap-a"></span></div>
-        <div class="leg-indicator"><div class="leg-dot" style="background:#4ecdc4"></div>B <span class="leg-gap" id="gap-b"></span></div>
-        <div class="leg-indicator"><div class="leg-dot" style="background:#ffe66d"></div>C <span class="leg-gap" id="gap-c"></span></div>
-        <div class="leg-indicator"><div class="leg-dot" style="background:#a18cd1"></div>D <span class="leg-gap" id="gap-d"></span></div>
+        <div class="leg-indicator"><div class="leg-dot" style="background:#c25a4e"></div>A <span class="leg-gap" id="gap-a"></span></div>
+        <div class="leg-indicator"><div class="leg-dot" style="background:#4a9a8f"></div>B <span class="leg-gap" id="gap-b"></span></div>
+        <div class="leg-indicator"><div class="leg-dot" style="background:#c49a3a"></div>C <span class="leg-gap" id="gap-c"></span></div>
+        <div class="leg-indicator"><div class="leg-dot" style="background:#7b6fa0"></div>D <span class="leg-gap" id="gap-d"></span></div>
       </div>
     </div>
   </div>
@@ -317,8 +321,8 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 container.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf0f0ea);
-scene.fog = new THREE.FogExp2(0xf0f0ea, 0.04);
+scene.background = new THREE.Color(0xf5f5ef);
+scene.fog = new THREE.FogExp2(0xf5f5ef, 0.04);
 
 const camera = new THREE.PerspectiveCamera(50, 640 / 480, 0.1, 100);
 camera.position.set(5, 6, 5);
@@ -352,8 +356,8 @@ const FLOOR_SEG = 80;
 const floorGeo = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE, FLOOR_SEG, FLOOR_SEG);
 floorGeo.rotateX(-Math.PI / 2);
 const floorMat = new THREE.MeshStandardMaterial({
-  color: 0x7a9a6a,
-  roughness: 0.85,
+  color: 0xc8c4b8,
+  roughness: 0.92,
   metalness: 0.1,
   flatShading: false,
   side: THREE.DoubleSide,
@@ -375,14 +379,14 @@ function updateFloorMesh() {
 updateFloorMesh();
 
 // Grid helper
-const gridHelper = new THREE.GridHelper(FLOOR_SIZE, 20, 0x88aa88, 0xaaccaa);
+const gridHelper = new THREE.GridHelper(FLOOR_SIZE, 20, 0xb0ada6, 0xcccac4);
 gridHelper.position.y = -0.01;
 scene.add(gridHelper);
 
 // ============================================================
 // Table
 // ============================================================
-const LEG_COLORS = [0xff6b6b, 0x4ecdc4, 0xffe66d, 0xa18cd1]; // A, B, C, D
+const LEG_COLORS = [0xc25a4e, 0x4a9a8f, 0xc49a3a, 0x7b6fa0]; // A, B, C, D
 const legLabels = ['A', 'B', 'C', 'D'];
 
 // Table group
@@ -605,10 +609,10 @@ function updateTable() {
     const gap = placement[i].gap;
     if (gap < 0.005) {
       el.textContent = 'on ground';
-      el.style.color = '#5f5';
+      el.style.color = '#2e7d32';
     } else {
       el.textContent = `+${gap.toFixed(3)}`;
-      el.style.color = '#fa5';
+      el.style.color = '#b86e2a';
     }
   }
 }
@@ -629,7 +633,7 @@ function drawChart() {
   const H = rect.height;
 
   chartCtx.clearRect(0, 0, W, H);
-  chartCtx.fillStyle = '#f8f8f4';
+  chartCtx.fillStyle = '#f5f5ef';
   chartCtx.fillRect(0, 0, W, H);
 
   const R = state.tableRadius;
