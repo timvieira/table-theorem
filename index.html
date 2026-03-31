@@ -746,64 +746,62 @@ function updateTable() {
 
   const isEamesGLB = type.topShape === 'eames' && legs.length === 0;
 
-  // Tabletop orientation
+  // Compute tabletop orientation (shared by all branches)
+  let up, right, forward;
   if (numLegs >= 4) {
-    const right = new THREE.Vector3().subVectors(topPositions[0], topPositions[1]).normalize();
-    const forward = new THREE.Vector3().subVectors(topPositions[0], topPositions[numLegs - 1]).normalize();
-    const up = new THREE.Vector3().crossVectors(forward, right).normalize();
-
-    if (isEamesGLB) {
-      // GLB model: position at foot centroid, scale uniformly to match leg span
-      const footCenter = new THREE.Vector3();
-      placement.forEach(p => footCenter.add(new THREE.Vector3(p.worldX, p.tableY, p.worldZ)));
-      footCenter.divideScalar(numLegs);
-      tabletop.position.copy(footCenter);
-      const mat4 = new THREE.Matrix4().makeBasis(right, up, forward);
-      tabletop.setRotationFromMatrix(mat4);
-      // The normalized model is ~1 unit tall; scale to match leg spread
-      const span = half * 2 * 1.4; // scale factor to fill the footprint
-      tabletop.scale.set(span, span, span);
-    } else {
-      tabletop.position.copy(center);
-      const mat4 = new THREE.Matrix4().makeBasis(right, up, forward);
-      tabletop.setRotationFromMatrix(mat4);
-      tabletop.scale.set(half * 2 * type.topAspect[0], 1, half * 2 * type.topAspect[1]);
-    }
+    right = new THREE.Vector3().subVectors(topPositions[0], topPositions[1]).normalize();
+    forward = new THREE.Vector3().subVectors(topPositions[0], topPositions[numLegs - 1]).normalize();
+    up = new THREE.Vector3().crossVectors(forward, right).normalize();
   } else {
-    // Tripod: compute plane from 3 points
     const v1 = new THREE.Vector3().subVectors(topPositions[1], topPositions[0]);
     const v2 = new THREE.Vector3().subVectors(topPositions[2], topPositions[0]);
-    const up = new THREE.Vector3().crossVectors(v1, v2).normalize();
+    up = new THREE.Vector3().crossVectors(v1, v2).normalize();
     if (up.y < 0) up.negate();
-    const right = v1.normalize();
-    const forward = new THREE.Vector3().crossVectors(up, right).normalize();
-    tabletop.position.copy(center);
-    const mat4 = new THREE.Matrix4().makeBasis(right, up, forward);
-    tabletop.setRotationFromMatrix(mat4);
-    tabletop.scale.set(half * 2, 1, half * 2);
+    right = v1.normalize();
+    forward = new THREE.Vector3().crossVectors(up, right).normalize();
   }
 
-  // Set legs (skip for eames GLB — model has its own)
+  // Set tabletop transform
+  const basisMat = new THREE.Matrix4().makeBasis(right, up, forward);
+  if (isEamesGLB) {
+    const footCenter = new THREE.Vector3();
+    placement.forEach(p => footCenter.add(new THREE.Vector3(p.worldX, p.tableY, p.worldZ)));
+    footCenter.divideScalar(numLegs);
+    tabletop.position.copy(footCenter);
+    tabletop.setRotationFromMatrix(basisMat);
+    const span = half * 2 * 1.4;
+    tabletop.scale.set(span, span, span);
+  } else {
+    tabletop.position.copy(center);
+    tabletop.setRotationFromMatrix(basisMat);
+    if (numLegs >= 4) {
+      tabletop.scale.set(half * 2 * type.topAspect[0], 1, half * 2 * type.topAspect[1]);
+    } else {
+      tabletop.scale.set(half * 2, 1, half * 2);
+    }
+  }
+
+  // Rigid legs: all perpendicular to tabletop (along -up direction)
+  const legDir = up.clone(); // tabletop normal = leg direction
+  const legQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), legDir);
   for (let i = 0; i < legs.length; i++) {
-    const foot = new THREE.Vector3(placement[i].worldX, placement[i].tableY, placement[i].worldZ);
     const top = topPositions[i];
-    const mid = new THREE.Vector3().addVectors(foot, top).multiplyScalar(0.5);
+    const rigidFoot = top.clone().addScaledVector(up, -LEG_LENGTH);
+    const mid = new THREE.Vector3().addVectors(top, rigidFoot).multiplyScalar(0.5);
     legs[i].position.copy(mid);
     legs[i].scale.set(1, LEG_LENGTH, 1);
-    const dir = new THREE.Vector3().subVectors(top, foot).normalize();
-    const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
-    legs[i].setRotationFromQuaternion(quat);
+    legs[i].setRotationFromQuaternion(legQuat);
 
-    // Foot sphere
-    legTouchSpheres[i].position.copy(foot);
+    // Foot sphere at the rigid leg end
+    legTouchSpheres[i].position.copy(rigidFoot);
     const isHovering = placement[i].gap > 0.005;
     legTouchSpheres[i].material.emissive = new THREE.Color(isHovering ? 0x442200 : 0x004400);
     legTouchSpheres[i].material.emissiveIntensity = isHovering ? 0.8 : 0.5;
     legTouchSpheres[i].scale.setScalar(isHovering ? 1.3 : 1.0);
 
-    // Gap line
+    // Gap line from rigid foot down to floor
     const floorPt = new THREE.Vector3(placement[i].worldX, placement[i].floorY, placement[i].worldZ);
-    gapLines[i].geometry.setFromPoints([floorPt, foot]);
+    gapLines[i].geometry.setFromPoints([floorPt, rigidFoot]);
     gapLines[i].computeLineDistances();
     gapLines[i].visible = isHovering;
   }
