@@ -428,7 +428,7 @@ const TABLE_TYPES = {
 // ============================================================
 // State
 // ============================================================
-const state = {
+const state = window._state = {
   theta: 0,            // rotation angle in radians
   tableRadius: 1.8,    // half-diagonal of the square table
   lumpiness: 0.5,
@@ -1325,7 +1325,8 @@ function animate(time) {
   lastTime = time;
 
   if (state.animating) {
-    let deg = parseFloat(thetaSlider.value) + dt * 10 * state.animDir;
+    const clampedDt = Math.min(dt, 0.1); // cap to avoid jumps
+    let deg = parseFloat(thetaSlider.value) + clampedDt * 10 * state.animDir;
     if (deg >= 90) { deg = 90; state.animDir = -1; }
     if (deg <= 0) { deg = 0; state.animDir = 1; }
     thetaSlider.value = deg.toFixed(1);
