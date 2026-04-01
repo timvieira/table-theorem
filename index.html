@@ -694,76 +694,108 @@ function placeTable(theta, R) {
     return result;
   }
 
-  // 4-leg case: for each triplet, compute the rigid body placement
+  // 4-leg case: for each triplet of grounded legs, solve the rigid body
+  // transform that places those 3 feet exactly on the floor, then check
+  // whether the 4th foot is above the floor.
   let bestConfig = null;
-
-  // Derive right/forward from theta + up (consistent regardless of which leg is skipped)
-  const cosT = Math.cos(theta);
-  const sinT = Math.sin(theta);
 
   for (let skip = 0; skip < 4; skip++) {
     const grounded = [0,1,2,3].filter(i => i !== skip);
-    const gpts = grounded.map(i => floorPts[i]);
 
-    // Floor plane normal from the 3 grounded contact points
-    const fv1 = new THREE.Vector3().subVectors(gpts[1], gpts[0]);
-    const fv2 = new THREE.Vector3().subVectors(gpts[2], gpts[0]);
+    // The 3 grounded feet must land exactly on these floor points:
+    const targetFeet = grounded.map(i => floorPts[i]);
+
+    // The 3 grounded legs' local positions (2D, in table-local coords):
+    const localG = grounded.map(i => localLegs[i]);
+
+    // Floor plane normal
+    const fv1 = new THREE.Vector3().subVectors(targetFeet[1], targetFeet[0]);
+    const fv2 = new THREE.Vector3().subVectors(targetFeet[2], targetFeet[0]);
     let up = new THREE.Vector3().crossVectors(fv1, fv2).normalize();
     if (up.y < 0) up.negate();
 
-    // Tabletop axes: project the table's rotated local axes onto the tilted plane
-    let rawRight = new THREE.Vector3(cosT, 0, sinT); // table's local X in world XZ
-    let right = rawRight.clone().addScaledVector(up, -rawRight.dot(up)).normalize();
-    let forward = new THREE.Vector3().crossVectors(up, right).normalize();
+    // Solve for right/forward from the grounded legs' floor positions.
+    // In world space: foot_i = tabCenter + right * (ll_i[0]*half) + forward * (ll_i[1]*half) - up * LEG_LENGTH
+    // So: foot_i + up*LEG_LENGTH = tabCenter + right*(ll_i[0]*half) + forward*(ll_i[1]*half)
+    // Let top_i = foot_i + up*LEG_LENGTH (the top of leg i)
+    // Then: top_i = tabCenter + right*(ll_i[0]*half) + forward*(ll_i[1]*half)
+    //
+    // From two grounded legs (0,1): top1 - top0 = right*(dl0*half) + forward*(dl1*half)
+    // where dl0 = localG[1][0]-localG[0][0], dl1 = localG[1][1]-localG[0][1]
+    //
+    // We have 2 direction equations from legs (0,1) and (0,2), and we know
+    // right and forward are in the plane perpendicular to up.
+    // Solve the 2x2 system.
 
-    // Use a reference grounded leg to anchor the rigid body in world space.
-    // The reference leg's foot is on the floor; its top is foot + LEG_LENGTH * up.
-    const ref = grounded[0];
-    const refFoot = gpts[0]; // floor position of reference leg
-    const refTop = refFoot.clone().addScaledVector(up, LEG_LENGTH);
-    // Reference leg's local offset from tabletop center:
-    const refLL = localLegs[ref];
-    const refLocalOff = new THREE.Vector3()
-      .addScaledVector(right, refLL[0] * half)
-      .addScaledVector(forward, refLL[1] * half);
-    // Tabletop center = refTop - refLocalOff
-    const tabCenter = refTop.clone().sub(refLocalOff);
+    const tops = targetFeet.map(f => f.clone().addScaledVector(up, LEG_LENGTH));
 
-    // Compute all 4 leg positions from the rigid body
+    // delta vectors between grounded leg tops
+    const d01 = new THREE.Vector3().subVectors(tops[1], tops[0]);
+    const d02 = new THREE.Vector3().subVectors(tops[2], tops[0]);
+
+    // Local coordinate deltas (scaled by half)
+    const a00 = (localG[1][0] - localG[0][0]) * half;
+    const a01 = (localG[1][1] - localG[0][1]) * half;
+    const a10 = (localG[2][0] - localG[0][0]) * half;
+    const a11 = (localG[2][1] - localG[0][1]) * half;
+
+    // Solve: d01 = right*a00 + forward*a01
+    //        d02 = right*a10 + forward*a11
+    const det = a00 * a11 - a01 * a10;
+    if (Math.abs(det) < 1e-10) continue; // degenerate
+
+    const right = d01.clone().multiplyScalar(a11 / det)
+      .addScaledVector(d02, -a01 / det);
+    const forward = d01.clone().multiplyScalar(-a10 / det)
+      .addScaledVector(d02, a00 / det);
+
+    // tabCenter from the first grounded leg
+    const tabCenter = tops[0].clone()
+      .addScaledVector(right, -localG[0][0] * half)
+      .addScaledVector(forward, -localG[0][1] * half);
+
+    // Now compute all 4 feet from the rigid body
     const allTops = [];
     const allFeet = [];
     for (let i = 0; i < 4; i++) {
       const ll = localLegs[i];
-      const localOff = new THREE.Vector3()
+      const top = tabCenter.clone()
         .addScaledVector(right, ll[0] * half)
         .addScaledVector(forward, ll[1] * half);
-      const top = tabCenter.clone().add(localOff);
       const foot = top.clone().addScaledVector(up, -LEG_LENGTH);
       allTops.push(top);
       allFeet.push(foot);
     }
 
+    // Verify grounded feet are actually on the floor (sanity check)
+    let valid = true;
+    for (const gi of grounded) {
+      const err = Math.abs(allFeet[gi].y - p[gi].floorZ);
+      if (err > 0.01) { valid = false; break; }
+    }
+    if (!valid) continue;
+
     const gap = allFeet[skip].y - p[skip].floorZ;
     if (gap >= -1e-4) {
       if (!bestConfig || gap < bestConfig.gap) {
-        const center4 = new THREE.Vector3();
-        allTops.forEach(t => center4.add(t));
-        center4.divideScalar(4);
-        bestConfig = { skip, gap, up, right, forward, tabCenter: center4, allFeet, allTops };
+        bestConfig = { skip, gap, up, right: right.clone().normalize(),
+          forward: forward.clone().normalize(), tabCenter, allFeet, allTops };
       }
     }
   }
 
   if (!bestConfig) {
-    // Fallback
+    // Fallback: flat placement
     const up = new THREE.Vector3(0, 1, 0);
-    const right = new THREE.Vector3(1, 0, 0);
-    const forward = new THREE.Vector3(0, 0, -1);
+    const cosT = Math.cos(theta), sinT = Math.sin(theta);
+    const right = new THREE.Vector3(cosT, 0, sinT);
+    const forward = new THREE.Vector3(-sinT, 0, cosT);
     const center = new THREE.Vector3();
     floorPts.forEach(f => center.add(f));
     center.divideScalar(4).addScaledVector(up, LEG_LENGTH);
     bestConfig = { skip: -1, gap: 0, up, right, forward, tabCenter: center,
-      allFeet: floorPts, allTops: floorPts.map(f => f.clone().addScaledVector(up, LEG_LENGTH)) };
+      allFeet: floorPts.map(f => f.clone()),
+      allTops: floorPts.map(f => f.clone().addScaledVector(up, LEG_LENGTH)) };
   }
 
   const result = [];
@@ -777,6 +809,19 @@ function placeTable(theta, R) {
       onGround: i !== bestConfig.skip,
     });
   }
+
+  // Assertions (log warnings to console)
+  let groundedCount = 0;
+  for (let i = 0; i < 4; i++) {
+    if (result[i].foot.y < result[i].floorY - 0.02) {
+      console.warn(`Leg ${i} foot below floor: foot.y=${result[i].foot.y.toFixed(4)}, floor=${result[i].floorY.toFixed(4)}`);
+    }
+    if (result[i].gap < 0.005) groundedCount++;
+  }
+  if (groundedCount < 3) {
+    console.warn(`Only ${groundedCount} legs grounded (expected 3+)`);
+  }
+
   result.rigid = {
     up: bestConfig.up,
     right: bestConfig.right,
