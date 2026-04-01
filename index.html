@@ -715,9 +715,6 @@ function placeTable(theta, R) {
     let up = new THREE.Vector3().crossVectors(fv1, fv2).normalize();
     if (up.y < 0) up.negate();
 
-    // Reject if the table would be tilted beyond ~70° (can't physically sit)
-    if (up.y < 0.35) continue;
-
     // Solve for right/forward from the grounded legs' floor positions.
     // In world space: foot_i = tabCenter + right * (ll_i[0]*half) + forward * (ll_i[1]*half) - up * LEG_LENGTH
     // So: foot_i + up*LEG_LENGTH = tabCenter + right*(ll_i[0]*half) + forward*(ll_i[1]*half)
