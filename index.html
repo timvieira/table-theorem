@@ -197,8 +197,13 @@
   #explanation em { color: #333; font-style: italic; }
   #buttons-row {
     display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
+    gap: 6px;
+  }
+  #buttons-row button {
+    flex: 1;
+    padding: 6px 4px;
+    font-size: 0.8em;
+    white-space: nowrap;
   }
   .zero-marker {
     color: #2e7d32;
@@ -249,7 +254,7 @@
         <span class="val" id="size-val">35</span>
       </div>
       <div id="buttons-row">
-        <button id="btn-new-floor">New Random Floor</button>
+        <button id="btn-new-floor">Randomize Floor</button>
         <button id="btn-animate" class="">Animate</button>
         <button id="btn-find-zero">Find Balance</button>
       </div>
