@@ -346,6 +346,7 @@ MathJax = {
 
 <script type="module">
 import * as THREE from 'three';
+window.THREE = THREE;
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -382,7 +383,7 @@ class LumpyFloor {
 // ============================================================
 // Table types
 // ============================================================
-const TABLE_TYPES = {
+const TABLE_TYPES = window.TABLE_TYPES = {
   square: {
     name: 'Square table',
     legs: [[+1,+1], [-1,+1], [-1,-1], [+1,-1]],
@@ -437,7 +438,7 @@ const state = window._state = {
   tableType: 'square',
 };
 
-const floor = new LumpyFloor(14, state.lumpiness);
+const floor = window.floor = new LumpyFloor(14, state.lumpiness);
 
 // ============================================================
 // Three.js setup
@@ -536,6 +537,7 @@ const tableGroup = new THREE.Group();
 scene.add(tableGroup);
 
 let tabletop = null;
+window.getTabletop = () => tabletop;
 let legs = [];
 let legTouchSpheres = [];
 let gapLines = [];
@@ -663,6 +665,7 @@ function getCurrentLegs() {
   return TABLE_TYPES[state.tableType].legs;
 }
 
+window.getLegWorldPos = getLegWorldPos;
 function getLegWorldPos(theta, R) {
   const localLegs = getCurrentLegs();
   const cosT = Math.cos(theta);
@@ -689,6 +692,7 @@ function computeLegHeights(theta, R) {
 // Place a rigid table with legs perpendicular to tabletop.
 // 3 legs touch the floor; the 4th hovers. The tabletop tilts with
 // the floor contact plane, and all geometry is consistent.
+window.placeTable = placeTable;
 function placeTable(theta, R) {
   const p = getLegWorldPos(theta, R);
   const numLegs = p.length;
@@ -863,6 +867,7 @@ function placeTable(theta, R) {
 let smoothedPlacement = null;
 const WOBBLE_SMOOTH = 0.15; // 0 = no smoothing, 1 = frozen
 
+window.updateTable = updateTable;
 function updateTable() {
   const type = TABLE_TYPES[state.tableType];
   const R = state.tableRadius;
@@ -925,6 +930,19 @@ function updateTable() {
       tabletop.setRotationFromMatrix(basisMat);
       const span = Math.max(col0.length(), col2.length()) * 1.1;
       tabletop.scale.set(span, span, span);
+
+      // Push model up if its bounding box dips below the floor
+      tabletop.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(tabletop);
+      // Sample floor height at the model's lowest point
+      const minPt = new THREE.Vector3(box.min.x, box.min.y, box.min.z);
+      const floorAtMin = floor.height(
+        (box.min.x + box.max.x) / 2,
+        (box.min.z + box.max.z) / 2
+      );
+      if (box.min.y < floorAtMin) {
+        tabletop.position.y += floorAtMin - box.min.y;
+      }
     } else {
       // Set world matrix directly: columns are the axis*scale vectors
       // Column-major: [col0.x, col0.y, col0.z, 0,  col1.x, col1.y, col1.z, 0,  col2.x, col2.y, col2.z, 0,  cx, cy, cz, 1]
