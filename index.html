@@ -839,35 +839,64 @@ function updateTable() {
   const placement = placeTable(state.theta, R);
   const numLegs = placement.length;
   const isEamesGLB = type.topShape === 'eames' && legs.length === 0;
-  const { up, right, forward, tabCenter } = placement.rigid;
+  const { up } = placement.rigid;
 
-  // Set tabletop transform
-  const basisMat = new THREE.Matrix4().makeBasis(right, up, forward);
-  if (isEamesGLB) {
-    // Eames: position at foot centroid, uniform scale
-    const footCenter = new THREE.Vector3();
-    placement.forEach(p => footCenter.add(p.foot));
-    footCenter.divideScalar(numLegs);
-    tabletop.position.copy(footCenter);
-    tabletop.setRotationFromMatrix(basisMat);
-    const span = half * 2 * 1.4;
-    tabletop.scale.set(span, span, span);
-  } else {
-    tabletop.position.copy(tabCenter);
-    tabletop.setRotationFromMatrix(basisMat);
-    if (numLegs >= 4) {
-      tabletop.scale.set(half * 2 * type.topAspect[0], 1, half * 2 * type.topAspect[1]);
+  // Derive tabletop visual directly from the computed top positions
+  if (numLegs >= 4) {
+    const tops = placement.map(p => p.top);
+    const center = new THREE.Vector3();
+    tops.forEach(t => center.add(t));
+    center.divideScalar(4);
+
+    // Axes and scale from the actual top positions
+    const rightVec = new THREE.Vector3().subVectors(tops[0], tops[1]);
+    const forwardVec = new THREE.Vector3().subVectors(tops[0], tops[numLegs - 1]);
+    const sx = rightVec.length();
+    const sz = forwardVec.length();
+    rightVec.normalize();
+    forwardVec.normalize();
+    const upVec = new THREE.Vector3().crossVectors(forwardVec, rightVec).normalize();
+
+    if (isEamesGLB) {
+      const footCenter = new THREE.Vector3();
+      placement.forEach(p => footCenter.add(p.foot));
+      footCenter.divideScalar(numLegs);
+      tabletop.position.copy(footCenter);
+      const basisMat = new THREE.Matrix4().makeBasis(rightVec, upVec, forwardVec);
+      tabletop.setRotationFromMatrix(basisMat);
+      const span = Math.max(sx, sz) * 1.1;
+      tabletop.scale.set(span, span, span);
     } else {
-      tabletop.scale.set(half * 2, 1, half * 2);
+      tabletop.position.copy(center);
+      const basisMat = new THREE.Matrix4().makeBasis(rightVec, upVec, forwardVec);
+      tabletop.setRotationFromMatrix(basisMat);
+      tabletop.scale.set(sx, 1, sz);
     }
+  } else {
+    // Tripod
+    const tops = placement.map(p => p.foot.clone().addScaledVector(up, LEG_LENGTH));
+    const center = new THREE.Vector3();
+    tops.forEach(t => center.add(t));
+    center.divideScalar(3);
+    const v1 = new THREE.Vector3().subVectors(tops[1], tops[0]);
+    const v2 = new THREE.Vector3().subVectors(tops[2], tops[0]);
+    const upVec = new THREE.Vector3().crossVectors(v1, v2).normalize();
+    if (upVec.y < 0) upVec.negate();
+    const rightVec = v1.normalize();
+    const forwardVec = new THREE.Vector3().crossVectors(upVec, rightVec).normalize();
+    tabletop.position.copy(center);
+    const basisMat = new THREE.Matrix4().makeBasis(rightVec, upVec, forwardVec);
+    tabletop.setRotationFromMatrix(basisMat);
+    tabletop.scale.set(half * 2, 1, half * 2);
   }
 
-  // Rigid legs: use foot/top positions computed by placeTable
-  const legQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), up);
+  // Legs: use foot/top positions directly from placeTable
   for (let i = 0; i < legs.length; i++) {
     const foot = placement[i].foot;
     const top = placement[i].top;
     const mid = new THREE.Vector3().addVectors(foot, top).multiplyScalar(0.5);
+    const dir = new THREE.Vector3().subVectors(top, foot).normalize();
+    const legQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
     legs[i].position.copy(mid);
     legs[i].scale.set(1, LEG_LENGTH, 1);
     legs[i].setRotationFromQuaternion(legQuat);
@@ -1290,6 +1319,91 @@ function animate(time) {
   renderer.render(scene, camera);
 }
 requestAnimationFrame(animate);
+
+// ============================================================
+// Property-based tests
+// ============================================================
+function testPlacement() {
+  const types = ['square', 'rectangle', 'tripod'];
+  const R = state.tableRadius;
+  const errors = [];
+
+  for (const typeId of types) {
+    const savedType = state.tableType;
+    state.tableType = typeId;
+    const type = TABLE_TYPES[typeId];
+    const numLegs = type.legs.length;
+
+    for (let deg = 0; deg <= 90; deg += 2) {
+      const theta = deg * Math.PI / 180;
+      const p = getLegWorldPos(theta, R);
+
+      if (numLegs === 3) continue; // tripod is always balanced
+
+      const placement = placeTable(theta, R);
+
+      // Property 1: Exactly 3 feet on the ground (gap < 0.01), 1 hovering
+      let grounded = 0;
+      for (let i = 0; i < numLegs; i++) {
+        if (placement[i].gap < 0.01) grounded++;
+      }
+      if (grounded < 3) {
+        errors.push(`[${typeId} θ=${deg}°] Only ${grounded} legs grounded (need 3+)`);
+      }
+
+      // Property 2: No foot below the floor
+      for (let i = 0; i < numLegs; i++) {
+        if (placement[i].foot.y < placement[i].floorY - 0.02) {
+          errors.push(`[${typeId} θ=${deg}°] Leg ${i} foot ${placement[i].foot.y.toFixed(3)} below floor ${placement[i].floorY.toFixed(3)}`);
+        }
+      }
+
+      // Property 3: Legs attach to tabletop (top-foot distance ≈ LEG_LENGTH)
+      for (let i = 0; i < numLegs; i++) {
+        const legLen = placement[i].top.distanceTo(placement[i].foot);
+        if (Math.abs(legLen - LEG_LENGTH) > 0.02) {
+          errors.push(`[${typeId} θ=${deg}°] Leg ${i} length ${legLen.toFixed(3)} != ${LEG_LENGTH}`);
+        }
+      }
+
+      // Property 4: All tops are coplanar (rigid tabletop)
+      if (numLegs === 4) {
+        const tops = placement.map(p => p.top);
+        const v1 = new THREE.Vector3().subVectors(tops[1], tops[0]);
+        const v2 = new THREE.Vector3().subVectors(tops[2], tops[0]);
+        const n = new THREE.Vector3().crossVectors(v1, v2).normalize();
+        const v3 = new THREE.Vector3().subVectors(tops[3], tops[0]);
+        const planarity = Math.abs(v3.dot(n));
+        if (planarity > 0.02) {
+          errors.push(`[${typeId} θ=${deg}°] Tops not coplanar (err=${planarity.toFixed(4)})`);
+        }
+      }
+
+      // Property 5: Grounded feet match floor height
+      for (let i = 0; i < numLegs; i++) {
+        if (placement[i].onGround) {
+          const err = Math.abs(placement[i].foot.y - placement[i].floorY);
+          if (err > 0.02) {
+            errors.push(`[${typeId} θ=${deg}°] Grounded leg ${i} foot.y=${placement[i].foot.y.toFixed(3)} != floor=${placement[i].floorY.toFixed(3)}`);
+          }
+        }
+      }
+    }
+
+    state.tableType = savedType;
+  }
+
+  if (errors.length > 0) {
+    console.error(`PLACEMENT TESTS: ${errors.length} failures:`);
+    errors.forEach(e => console.error('  ' + e));
+  } else {
+    console.log('PLACEMENT TESTS: all passed');
+  }
+  return errors;
+}
+
+// Run tests on startup
+testPlacement();
 
 // ============================================================
 // Resize handling
