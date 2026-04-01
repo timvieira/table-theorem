@@ -875,8 +875,10 @@ function updateTable() {
   const rawPlacement = placeTable(state.theta, R);
   const numLegs = rawPlacement.length;
 
-  // Smooth the placement by lerping toward the new target
-  if (!smoothedPlacement || smoothedPlacement.length !== numLegs) {
+  // Smooth the wobble for 4-leg tables (lerp toward new placement)
+  // Skip for tripod (no wobble) and eames (GLB model)
+  const shouldSmooth = numLegs === 4 && type.topShape !== 'eames';
+  if (!shouldSmooth || !smoothedPlacement || smoothedPlacement.length !== numLegs) {
     smoothedPlacement = rawPlacement;
   } else {
     for (let i = 0; i < numLegs; i++) {
@@ -984,17 +986,18 @@ function updateTable() {
       tabletop.matrixWorldNeedsUpdate = true;
     }
   } else {
-    // Tripod
-    const tops = placement.map(p => p.foot.clone().addScaledVector(up, LEG_LENGTH));
+    // Tripod: use tops directly from placement (consistent with legs)
+    const tops = placement.map(p => p.top);
     const center = new THREE.Vector3();
     tops.forEach(t => center.add(t));
-    center.divideScalar(3);
+    center.divideScalar(numLegs);
     const v1 = new THREE.Vector3().subVectors(tops[1], tops[0]);
     const v2 = new THREE.Vector3().subVectors(tops[2], tops[0]);
     const upVec = new THREE.Vector3().crossVectors(v1, v2).normalize();
     if (upVec.y < 0) upVec.negate();
-    const rightVec = v1.normalize();
+    const rightVec = v1.clone().normalize();
     const forwardVec = new THREE.Vector3().crossVectors(upVec, rightVec).normalize();
+    tabletop.matrixAutoUpdate = true;
     tabletop.position.copy(center);
     const basisMat = new THREE.Matrix4().makeBasis(rightVec, upVec, forwardVec);
     tabletop.setRotationFromMatrix(basisMat);
