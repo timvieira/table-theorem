@@ -27,6 +27,8 @@ class LumpyFloor {
 const TABLE_TYPES = {
   square: { legs: [[+1,+1],[-1,+1],[-1,-1],[+1,-1]], labels: ['A','B','C','D'], topAspect: [1,1] },
   rectangle: { legs: [[+1.4,+1],[-1.4,+1],[-1.4,-1],[+1.4,-1]], labels: ['A','B','C','D'], topAspect: [1.4,1] },
+  eames: { legs: [[+1.1,+1.1],[-1.1,+1.1],[-1.1,-1.1],[+1.1,-1.1]], labels: ['A','B','C','D'], topAspect: [1,1] },
+  tripod: { legs: [[0, 1], [-0.866, -0.5], [0.866, -0.5]], labels: ['A','B','C'], topAspect: [1,1] },
 };
 
 const LEG_LENGTH = 1.0;
@@ -46,8 +48,20 @@ function getLegWorldPos(theta, R) {
 function placeTable(theta, R) {
   const p = getLegWorldPos(theta, R);
   const localLegs = TABLE_TYPES[tableType].legs;
+  const numLegs = localLegs.length;
   const half = R / Math.SQRT2;
   const floorPts = p.map(pi => new THREE.Vector3(pi.x, pi.floorZ, pi.y));
+
+  // Tripod: all 3 legs always touch
+  if (numLegs === 3) {
+    return p.map((pi, i) => ({
+      floorY: pi.floorZ,
+      foot: floorPts[i],
+      top: floorPts[i].clone().add(new THREE.Vector3(0, LEG_LENGTH, 0)),
+      gap: 0,
+      onGround: true,
+    }));
+  }
 
   let bestConfig = null;
   for (let skip = 0; skip < 4; skip++) {
@@ -119,7 +133,7 @@ function placeTable(theta, R) {
 let totalFails = 0, totalTests = 0;
 const R = 1.8;
 
-for (const type of ['square', 'rectangle']) {
+for (const type of ['square', 'rectangle', 'eames', 'tripod']) {
   tableType = type;
   for (const lump of [0.1, 0.5, 1.0, 2.0, 5.0]) {
     for (let trial = 0; trial < 5; trial++) {
@@ -128,10 +142,11 @@ for (const type of ['square', 'rectangle']) {
         totalTests++;
         const theta = deg * Math.PI / 180;
         const placement = placeTable(theta, R);
+        const nl = TABLE_TYPES[type].legs.length;
         if (!placement) { totalFails++; console.log(`FAIL [${type} lump=${lump} θ=${deg}] no valid config`); continue; }
 
         let grounded = 0;
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < nl; i++) {
           // Property 1: no foot below floor
           if (placement[i].foot.y < placement[i].floorY - 0.02) {
             totalFails++;
@@ -154,19 +169,22 @@ for (const type of ['square', 'rectangle']) {
           }
         }
         // Property 4: 3+ grounded
-        if (grounded < 3) {
+        const expectedGrounded = nl === 3 ? 3 : 3;
+        if (grounded < expectedGrounded) {
           totalFails++;
           console.log(`FAIL [${type} lump=${lump} θ=${deg}] only ${grounded} grounded`);
         }
-        // Property 5: tops coplanar
-        const tops = placement.map(p => p.top);
-        const v1 = new THREE.Vector3().subVectors(tops[1], tops[0]);
-        const v2 = new THREE.Vector3().subVectors(tops[2], tops[0]);
-        const n = new THREE.Vector3().crossVectors(v1, v2).normalize();
-        const v3 = new THREE.Vector3().subVectors(tops[3], tops[0]);
-        if (Math.abs(v3.dot(n)) > 0.02) {
-          totalFails++;
-          console.log(`FAIL [${type} lump=${lump} θ=${deg}] tops not coplanar: ${Math.abs(v3.dot(n)).toFixed(4)}`);
+        // Property 5: tops coplanar (4-leg only)
+        if (nl === 4) {
+          const tops = placement.map(p => p.top);
+          const v1 = new THREE.Vector3().subVectors(tops[1], tops[0]);
+          const v2 = new THREE.Vector3().subVectors(tops[2], tops[0]);
+          const n = new THREE.Vector3().crossVectors(v1, v2).normalize();
+          const v3 = new THREE.Vector3().subVectors(tops[3], tops[0]);
+          if (Math.abs(v3.dot(n)) > 0.02) {
+            totalFails++;
+            console.log(`FAIL [${type} lump=${lump} θ=${deg}] tops not coplanar: ${Math.abs(v3.dot(n)).toFixed(4)}`);
+          }
         }
       }
     }

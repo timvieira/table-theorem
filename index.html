@@ -928,23 +928,18 @@ function updateTable() {
     gapLines[i].visible = isHovering;
   }
 
-  // Update Eiffel cross-braces
-  for (const strut of eiffelStruts) {
-    const footA = new THREE.Vector3(placement[strut.from].worldX, placement[strut.from].tableY, placement[strut.from].worldZ);
-    const topA = topPositions[strut.from];
-    const footB = new THREE.Vector3(placement[strut.to].worldX, placement[strut.to].tableY, placement[strut.to].worldZ);
-    const topB = topPositions[strut.to];
-    // Place strut at 35% height between feet and tops
-    const ptA = new THREE.Vector3().lerpVectors(footA, topA, 0.35);
-    const ptB = new THREE.Vector3().lerpVectors(footB, topB, 0.35);
-    const mid = new THREE.Vector3().addVectors(ptA, ptB).multiplyScalar(0.5);
-    const dir = new THREE.Vector3().subVectors(ptB, ptA);
-    const len = dir.length();
-    dir.normalize();
-    strut.mesh.position.copy(mid);
-    strut.mesh.scale.set(1, len, 1);
-    const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
-    strut.mesh.setRotationFromQuaternion(quat);
+  // Visual consistency check: verify tabletop corners match leg tops
+  if (legs.length > 0 && numLegs >= 4) {
+    tabletop.updateMatrixWorld(true);
+    const localCorners = [[0.5,0.5],[-0.5,0.5],[-0.5,-0.5],[0.5,-0.5]];
+    for (let i = 0; i < numLegs; i++) {
+      const lc = localCorners[i];
+      const worldCorner = new THREE.Vector3(lc[0], 0, lc[1]).applyMatrix4(tabletop.matrixWorld);
+      const err = worldCorner.distanceTo(placement[i].top);
+      if (err > 0.05) {
+        console.warn(`Tabletop corner ${i} off by ${err.toFixed(3)} from leg top`);
+      }
+    }
   }
 
   // Update leg status display
@@ -1318,7 +1313,7 @@ function animate(time) {
   lastTime = time;
 
   if (state.animating) {
-    let deg = parseFloat(thetaSlider.value) + dt * 15 * state.animDir;
+    let deg = parseFloat(thetaSlider.value) + dt * 6 * state.animDir;
     if (deg >= 90) { deg = 90; state.animDir = -1; }
     if (deg <= 0) { deg = 0; state.animDir = 1; }
     thetaSlider.value = deg.toFixed(1);
