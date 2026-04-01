@@ -846,6 +846,7 @@ function updateTable() {
   // map exactly to the 4 top positions.
   if (numLegs >= 4) {
     const tops = placement.map(p => p.top);
+    if (tops.some(t => !t)) { console.error('Missing top in placement'); return; }
     const center = new THREE.Vector3();
     tops.forEach(t => center.add(t));
     center.divideScalar(4);
@@ -905,6 +906,10 @@ function updateTable() {
 
   // Legs: use foot/top positions directly from placeTable
   for (let i = 0; i < legs.length; i++) {
+    if (!placement[i] || !placement[i].foot || !placement[i].top) {
+      console.error(`Leg ${i}: missing foot/top in placement`, placement[i]);
+      continue;
+    }
     const foot = placement[i].foot;
     const top = placement[i].top;
     const mid = new THREE.Vector3().addVectors(foot, top).multiplyScalar(0.5);
