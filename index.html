@@ -170,8 +170,6 @@
     gap: 5px;
     font-size: 0.82em;
     padding: 2px 6px;
-    border-radius: 4px;
-    background: #e8e8e2;
   }
   .leg-dot {
     width: 10px;
@@ -257,7 +255,7 @@
       </div>
     </div>
     <div class="panel">
-      <h3>Leg heights $h_i(\theta)$ &amp; wobble $f(\theta)$</h3>
+      <h3>$h_i(\theta)$ &amp; $f(\theta)$</h3>
       <div id="chart-container">
         <canvas id="chart-canvas"></canvas>
         <div id="chart-labels"></div>
@@ -499,28 +497,94 @@ scene.add(fillLight);
 // ============================================================
 const FLOOR_SIZE = 10;
 const FLOOR_SEG = 80;
-const floorGeo = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE, FLOOR_SEG, FLOOR_SEG);
-floorGeo.rotateX(-Math.PI / 2);
+const FLOOR_DEPTH = 0.35;
+
 const floorMat = new THREE.MeshStandardMaterial({
   color: 0xc8c4b8,
   roughness: 0.92,
   metalness: 0.1,
   flatShading: false,
-  side: THREE.DoubleSide,
 });
+
+// Top surface
+const floorGeo = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE, FLOOR_SEG, FLOOR_SEG);
+floorGeo.rotateX(-Math.PI / 2);
 const floorMesh = new THREE.Mesh(floorGeo, floorMat);
 floorMesh.receiveShadow = true;
 scene.add(floorMesh);
 
+// Bottom surface (parallel copy offset down, backside renders downward-facing)
+const floorBotGeo = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE, FLOOR_SEG, FLOOR_SEG);
+floorBotGeo.rotateX(-Math.PI / 2);
+const floorBotMat = new THREE.MeshStandardMaterial({
+  color: 0xc8c4b8, roughness: 0.92, metalness: 0.1, side: THREE.BackSide,
+});
+const floorBotMesh = new THREE.Mesh(floorBotGeo, floorBotMat);
+scene.add(floorBotMesh);
+
+// Edge skirt connecting top and bottom perimeters
+function buildSkirtGeo() {
+  // Perimeter vertex indices: walk the edges of the (FLOOR_SEG+1) x (FLOOR_SEG+1) grid
+  const S = FLOOR_SEG + 1;
+  const perim = [];
+  for (let i = 0; i < FLOOR_SEG; i++) perim.push(i);                           // top row
+  for (let i = 0; i < FLOOR_SEG; i++) perim.push(i * S + FLOOR_SEG);           // right col
+  for (let i = FLOOR_SEG; i > 0; i--) perim.push(FLOOR_SEG * S + i);           // bottom row
+  for (let i = FLOOR_SEG; i > 0; i--) perim.push(i * S);                       // left col
+  const n = perim.length;
+  const verts = new Float32Array(n * 2 * 3);
+  const indices = [];
+  // Will fill positions in updateFloorMesh
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const t = i, b = i + n;
+    const tj = j, bj = j + n;
+    indices.push(t, b, tj, tj, b, bj);
+  }
+  geo.setIndex(indices);
+  geo._perimIndices = perim;
+  return geo;
+}
+const skirtGeo = buildSkirtGeo();
+const skirtMat = new THREE.MeshStandardMaterial({
+  color: 0xc8c4b8, roughness: 0.92, metalness: 0.1, side: THREE.DoubleSide,
+});
+const skirtMesh = new THREE.Mesh(skirtGeo, skirtMat);
+scene.add(skirtMesh);
+
 function updateFloorMesh() {
   const pos = floorGeo.attributes.position;
+  const botPos = floorBotGeo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const z = pos.getZ(i);
-    pos.setY(i, floor.height(x, z));
+    const h = floor.height(x, z);
+    pos.setY(i, h);
+    botPos.setY(i, h - FLOOR_DEPTH);
   }
   pos.needsUpdate = true;
+  botPos.needsUpdate = true;
   floorGeo.computeVertexNormals();
+  floorBotGeo.computeVertexNormals();
+
+  // Update skirt
+  const skirtPos = skirtGeo.attributes.position;
+  const perim = skirtGeo._perimIndices;
+  const n = perim.length;
+  for (let i = 0; i < n; i++) {
+    const vi = perim[i];
+    const x = pos.getX(vi);
+    const y = pos.getY(vi);
+    const z = pos.getZ(vi);
+    // Top ring
+    skirtPos.setXYZ(i, x, y, z);
+    // Bottom ring
+    skirtPos.setXYZ(i + n, x, y - FLOOR_DEPTH, z);
+  }
+  skirtPos.needsUpdate = true;
+  skirtGeo.computeVertexNormals();
 }
 updateFloorMesh();
 
@@ -1106,6 +1170,10 @@ function drawChart() {
   const botH = (H - margin.top - margin.bottom - gap) * 0.45;
   const plotW = W - margin.left - margin.right;
 
+  // Store layout for pointer interaction
+  drawChart._marginLeft = margin.left;
+  drawChart._plotW = plotW;
+
   const type = TABLE_TYPES[state.tableType];
   const numLegs = type.legs.length;
 
@@ -1313,6 +1381,35 @@ function drawChart() {
   }
 }
 
+const thetaSlider = document.getElementById('theta-slider');
+const thetaVal = document.getElementById('theta-val');
+
+// ============================================================
+// Chart drag to set theta
+// ============================================================
+{
+  let dragging = false;
+  function chartPointerToTheta(e) {
+    const rect = chartCanvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const deg = Math.max(0, Math.min(90, ((x - drawChart._marginLeft) / drawChart._plotW) * 90));
+    state.theta = deg * Math.PI / 180;
+    thetaSlider.value = deg;
+    thetaVal.textContent = deg.toFixed(1) + '°';
+  }
+  chartCanvas.style.cursor = 'ew-resize';
+  chartCanvas.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    chartCanvas.setPointerCapture(e.pointerId);
+    chartPointerToTheta(e);
+  });
+  chartCanvas.addEventListener('pointermove', (e) => {
+    if (dragging) chartPointerToTheta(e);
+  });
+  chartCanvas.addEventListener('pointerup', () => { dragging = false; });
+  chartCanvas.addEventListener('pointercancel', () => { dragging = false; });
+}
+
 // ============================================================
 // Controls
 // ============================================================
@@ -1322,8 +1419,6 @@ tableTypeSelect.addEventListener('change', () => {
   buildTable(state.tableType);
 });
 
-const thetaSlider = document.getElementById('theta-slider');
-const thetaVal = document.getElementById('theta-val');
 const lumpSlider = document.getElementById('lumpiness-slider');
 const lumpVal = document.getElementById('lumpiness-val');
 const sizeSlider = document.getElementById('size-slider');
