@@ -8,7 +8,9 @@ The Wobbly Table Theorem (also known as the intermediate value theorem applicati
 
 ## Demo
 
-Open `index.html` in a browser to explore the interactive simulation. You can:
+**[Live demo](https://timvieira.github.io/table-theorem/)**
+
+You can:
 
 - Adjust the terrain bumpiness and shape
 - Watch the table rotate and observe how leg contact changes
