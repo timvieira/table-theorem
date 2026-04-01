@@ -841,36 +841,49 @@ function updateTable() {
   const isEamesGLB = type.topShape === 'eames' && legs.length === 0;
   const { up } = placement.rigid;
 
-  // Derive tabletop visual directly from the computed top positions
+  // Derive tabletop visual directly from the computed top positions.
+  // Set the tabletop's world matrix so its local corners (±0.5, 0, ±0.5)
+  // map exactly to the 4 top positions.
   if (numLegs >= 4) {
     const tops = placement.map(p => p.top);
     const center = new THREE.Vector3();
     tops.forEach(t => center.add(t));
     center.divideScalar(4);
 
-    // Axes and scale from the actual top positions
-    const rightVec = new THREE.Vector3().subVectors(tops[0], tops[1]);
-    const forwardVec = new THREE.Vector3().subVectors(tops[0], tops[numLegs - 1]);
-    const sx = rightVec.length();
-    const sz = forwardVec.length();
-    rightVec.normalize();
-    forwardVec.normalize();
-    const upVec = new THREE.Vector3().crossVectors(forwardVec, rightVec).normalize();
+    // The tabletop box has local corners at (±0.5, 0, ±0.5).
+    // We need: worldPos = center + col0 * localX + col2 * localZ
+    // where col0 maps localX=0.5 to the half-extent along the A-B direction
+    // and col2 maps localZ=0.5 to the half-extent along the A-D direction.
+    // So col0 = (tops[0]-tops[1]) and col2 = (tops[0]-tops[3])
+    // (these are the full span, and localX goes ±0.5 so it works out).
+    const col0 = new THREE.Vector3().subVectors(tops[0], tops[1]); // right * full span
+    const col2 = new THREE.Vector3().subVectors(tops[0], tops[numLegs - 1]); // forward * full span
+    const col1 = new THREE.Vector3().crossVectors(col2, col0).normalize(); // up (unit)
 
     if (isEamesGLB) {
       const footCenter = new THREE.Vector3();
       placement.forEach(p => footCenter.add(p.foot));
       footCenter.divideScalar(numLegs);
+      // For Eames: use orthonormalized basis + uniform scale
+      const rightVec = col0.clone().normalize();
+      const upVec = col1;
+      const forwardVec = new THREE.Vector3().crossVectors(rightVec, upVec).negate().normalize();
       tabletop.position.copy(footCenter);
       const basisMat = new THREE.Matrix4().makeBasis(rightVec, upVec, forwardVec);
       tabletop.setRotationFromMatrix(basisMat);
-      const span = Math.max(sx, sz) * 1.1;
+      const span = Math.max(col0.length(), col2.length()) * 1.1;
       tabletop.scale.set(span, span, span);
     } else {
-      tabletop.position.copy(center);
-      const basisMat = new THREE.Matrix4().makeBasis(rightVec, upVec, forwardVec);
-      tabletop.setRotationFromMatrix(basisMat);
-      tabletop.scale.set(sx, 1, sz);
+      // Set world matrix directly: columns are the axis*scale vectors
+      // Column-major: [col0.x, col0.y, col0.z, 0,  col1.x, col1.y, col1.z, 0,  col2.x, col2.y, col2.z, 0,  cx, cy, cz, 1]
+      tabletop.matrixAutoUpdate = false;
+      tabletop.matrix.set(
+        col0.x, col1.x, col2.x, center.x,
+        col0.y, col1.y, col2.y, center.y,
+        col0.z, col1.z, col2.z, center.z,
+        0, 0, 0, 1
+      );
+      tabletop.matrixWorldNeedsUpdate = true;
     }
   } else {
     // Tripod
