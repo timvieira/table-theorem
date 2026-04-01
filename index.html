@@ -859,12 +859,35 @@ function placeTable(theta, R) {
   return result;
 }
 
+// Smoothed placement state for wobble damping
+let smoothedPlacement = null;
+const WOBBLE_SMOOTH = 0.15; // 0 = no smoothing, 1 = frozen
+
 function updateTable() {
   const type = TABLE_TYPES[state.tableType];
   const R = state.tableRadius;
   const half = R / Math.SQRT2;
-  const placement = placeTable(state.theta, R);
-  const numLegs = placement.length;
+  const rawPlacement = placeTable(state.theta, R);
+  const numLegs = rawPlacement.length;
+
+  // Smooth the placement by lerping toward the new target
+  if (!smoothedPlacement || smoothedPlacement.length !== numLegs) {
+    smoothedPlacement = rawPlacement;
+  } else {
+    for (let i = 0; i < numLegs; i++) {
+      smoothedPlacement[i].foot.lerp(rawPlacement[i].foot, 1 - WOBBLE_SMOOTH);
+      smoothedPlacement[i].top.lerp(rawPlacement[i].top, 1 - WOBBLE_SMOOTH);
+      smoothedPlacement[i].gap = rawPlacement[i].gap;
+      smoothedPlacement[i].onGround = rawPlacement[i].onGround;
+      smoothedPlacement[i].floorY = rawPlacement[i].floorY;
+      smoothedPlacement[i].worldX = rawPlacement[i].worldX;
+      smoothedPlacement[i].worldZ = rawPlacement[i].worldZ;
+    }
+    if (rawPlacement.rigid) {
+      smoothedPlacement.rigid = rawPlacement.rigid;
+    }
+  }
+  const placement = smoothedPlacement;
   const isEamesGLB = type.topShape === 'eames' && legs.length === 0;
   const { up } = placement.rigid;
 
@@ -1331,7 +1354,7 @@ function animate(time) {
   if (state.animating) {
     const clampedDt = Math.min(dt, 0.1);
     let deg = parseFloat(thetaSlider.value) || 0; // NaN guard
-    deg += clampedDt * 10 * state.animDir;
+    deg += clampedDt * 30 * state.animDir;
     if (deg >= 90) { deg = 90; state.animDir = -1; }
     if (deg <= 0) { deg = 0; state.animDir = 1; }
     thetaSlider.value = deg.toFixed(1);
