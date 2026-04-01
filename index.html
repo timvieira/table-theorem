@@ -888,19 +888,11 @@ function updateTable() {
     const col1 = new THREE.Vector3().crossVectors(col2, col0).normalize(); // up (unit)
 
     if (isEamesGLB) {
-      // Position at the highest grounded foot so the model doesn't sink
-      let basePos = placement[0].foot.clone();
-      for (let i = 1; i < numLegs; i++) {
-        if (placement[i].onGround && placement[i].foot.y > basePos.y) {
-          basePos = placement[i].foot.clone();
-        }
-      }
-      // Use the XZ center of all feet but the Y of the highest grounded foot
-      const footCenter = new THREE.Vector3();
-      placement.forEach(p => footCenter.add(p.foot));
-      footCenter.divideScalar(numLegs);
-      basePos.x = footCenter.x;
-      basePos.z = footCenter.z;
+      // Position at the centroid of grounded feet only (not the hovering one)
+      const groundedFeet = placement.filter(p => p.onGround).map(p => p.foot);
+      const basePos = new THREE.Vector3();
+      groundedFeet.forEach(f => basePos.add(f));
+      basePos.divideScalar(groundedFeet.length || 1);
 
       const rightVec = col0.clone().normalize();
       const upVec = col1;
