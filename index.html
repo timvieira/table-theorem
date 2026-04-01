@@ -707,9 +707,11 @@ function placeTable(theta, R) {
     const right = v1.clone().normalize();
     const forward = new THREE.Vector3().crossVectors(up, right).normalize();
 
+    const tops = floorPts.map(f => f.clone().addScaledVector(up, LEG_LENGTH));
     const result = p.map((pi, i) => ({
       worldX: pi.x, worldZ: pi.y,
       floorY: pi.floorZ, foot: floorPts[i],
+      top: tops[i],
       gap: 0, onGround: true,
     }));
     const footCenter = new THREE.Vector3();
@@ -886,14 +888,24 @@ function updateTable() {
     const col1 = new THREE.Vector3().crossVectors(col2, col0).normalize(); // up (unit)
 
     if (isEamesGLB) {
+      // Position at the highest grounded foot so the model doesn't sink
+      let basePos = placement[0].foot.clone();
+      for (let i = 1; i < numLegs; i++) {
+        if (placement[i].onGround && placement[i].foot.y > basePos.y) {
+          basePos = placement[i].foot.clone();
+        }
+      }
+      // Use the XZ center of all feet but the Y of the highest grounded foot
       const footCenter = new THREE.Vector3();
       placement.forEach(p => footCenter.add(p.foot));
       footCenter.divideScalar(numLegs);
-      // For Eames: use orthonormalized basis + uniform scale
+      basePos.x = footCenter.x;
+      basePos.z = footCenter.z;
+
       const rightVec = col0.clone().normalize();
       const upVec = col1;
       const forwardVec = new THREE.Vector3().crossVectors(rightVec, upVec).negate().normalize();
-      tabletop.position.copy(footCenter);
+      tabletop.position.copy(basePos);
       const basisMat = new THREE.Matrix4().makeBasis(rightVec, upVec, forwardVec);
       tabletop.setRotationFromMatrix(basisMat);
       const span = Math.max(col0.length(), col2.length()) * 1.1;
