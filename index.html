@@ -245,8 +245,8 @@
       </div>
       <div class="control-row">
         <label>Table size</label>
-        <input type="range" id="size-slider" min="30" max="80" step="1" value="50">
-        <span class="val" id="size-val">50</span>
+        <input type="range" id="size-slider" min="30" max="80" step="1" value="35">
+        <span class="val" id="size-val">35</span>
       </div>
       <div id="buttons-row">
         <button id="btn-new-floor">New Random Floor</button>
@@ -255,7 +255,6 @@
       </div>
     </div>
     <div class="panel">
-      <h3>$h_i(\theta)$ &amp; $f(\theta)$</h3>
       <div id="chart-container">
         <canvas id="chart-canvas"></canvas>
         <div id="chart-labels"></div>
@@ -444,7 +443,7 @@ const TABLE_TYPES = window.TABLE_TYPES = {
 // ============================================================
 const state = window._state = {
   theta: 0,            // rotation angle in radians
-  tableRadius: 1.8,    // half-diagonal of the square table
+  tableRadius: 1.26,   // half-diagonal of the square table
   lumpiness: 1.58,
   animating: false,
   animDir: 1,
@@ -1065,7 +1064,9 @@ function updateTable() {
       tabletop.matrixWorldNeedsUpdate = true;
     }
   } else {
-    // Tripod: use tops directly from placement (consistent with legs)
+    // Tripod: set world matrix directly from placement tops (same approach as 4-leg).
+    // The CylinderGeometry has radius 0.5, so we need columns whose length = half*2
+    // so that local ±0.5 maps to ±half in world.
     const tops = placement.map(p => p.top);
     const center = new THREE.Vector3();
     tops.forEach(t => center.add(t));
@@ -1076,11 +1077,20 @@ function updateTable() {
     if (upVec.y < 0) upVec.negate();
     const rightVec = v1.clone().normalize();
     const forwardVec = new THREE.Vector3().crossVectors(upVec, rightVec).normalize();
-    tabletop.matrixAutoUpdate = true;
-    tabletop.position.copy(center);
-    const basisMat = new THREE.Matrix4().makeBasis(rightVec, upVec, forwardVec);
-    tabletop.setRotationFromMatrix(basisMat);
-    tabletop.scale.set(half * 2, 1, half * 2);
+    // Scale axes so the cylinder (radius 0.5) spans the correct world size
+    const worldRadius = half;  // legs are at distance 1.0 in local, scaled by half
+    const scale = worldRadius * 2;  // diameter
+    const col0 = rightVec.clone().multiplyScalar(scale);
+    const col1 = upVec.clone();  // Y axis: height scale = 1 (cylinder is 0.06 thick)
+    const col2 = forwardVec.clone().multiplyScalar(scale);
+    tabletop.matrixAutoUpdate = false;
+    tabletop.matrix.set(
+      col0.x, col1.x, col2.x, center.x,
+      col0.y, col1.y, col2.y, center.y,
+      col0.z, col1.z, col2.z, center.z,
+      0, 0, 0, 1
+    );
+    tabletop.matrixWorldNeedsUpdate = true;
   }
 
   // Legs: use foot/top positions directly from placeTable
