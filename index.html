@@ -124,6 +124,30 @@
     height: 100%;
     border-radius: 4px;
   }
+  #chart-labels {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+  }
+  .chart-label {
+    position: absolute;
+    font-size: 0.6em;
+    color: #999;
+    white-space: nowrap;
+  }
+  .chart-legend-item {
+    position: absolute;
+    font-size: 0.55em;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .chart-legend-line {
+    width: 14px;
+    height: 2px;
+    display: inline-block;
+  }
   #leg-indicators {
     display: flex;
     gap: 8px;
@@ -221,6 +245,7 @@
       <h3>Leg heights $h_i(\theta)$ &amp; wobble $f(\theta)$</h3>
       <div id="chart-container">
         <canvas id="chart-canvas"></canvas>
+        <div id="chart-labels"></div>
       </div>
     </div>
     <div class="panel">
@@ -1056,28 +1081,7 @@ function drawChart() {
     chartCtx.fill();
   }
 
-  // Top subplot label
-  chartCtx.fillStyle = '#999';
-  chartCtx.font = '10px Georgia';
-  chartCtx.textAlign = 'right';
-  chartCtx.fillText('h(θ)', margin.left - 4, topY0 + 8);
-
-  // Legend (right side)
   const legendX = margin.left + plotW + 10;
-  const legendLabels = type.labels.map(l => 'h_' + l);
-  for (let j = 0; j < numLegs; j++) {
-    const ly = topY0 + 8 + j * 16;
-    chartCtx.strokeStyle = LEG_CSS_COLORS[j];
-    chartCtx.lineWidth = 2;
-    chartCtx.beginPath();
-    chartCtx.moveTo(legendX, ly);
-    chartCtx.lineTo(legendX + 14, ly);
-    chartCtx.stroke();
-    chartCtx.fillStyle = '#666';
-    chartCtx.font = '10px Georgia';
-    chartCtx.textAlign = 'left';
-    chartCtx.fillText(legendLabels[j], legendX + 18, ly + 3);
-  }
 
   // === BOTTOM SUBPLOT: f(θ) ===
   const botY0 = topY0 + topH + gap;
@@ -1187,31 +1191,35 @@ function drawChart() {
   chartCtx.stroke();
   chartCtx.setLineDash([]);
 
-  // Bottom subplot labels
-  chartCtx.fillStyle = '#999';
-  chartCtx.font = '10px Georgia';
-  chartCtx.textAlign = 'right';
-  chartCtx.fillText('f(θ)', margin.left - 4, botY0 + 8);
-  chartCtx.fillText('0', margin.left - 6, toYf(0) + 3);
-
-  // X-axis labels (bottom)
-  chartCtx.textAlign = 'center';
-  chartCtx.fillText('0°', toX(0), botY0 + botH + 14);
-  chartCtx.fillText('45°', toX(45), botY0 + botH + 14);
-  chartCtx.fillText('90°', toX(90), botY0 + botH + 14);
-
+  // HTML overlay labels with MathJax
+  const labelsEl = document.getElementById('chart-labels');
+  let html = '';
+  // Y-axis labels
+  html += `<span class="chart-label" style="right:calc(100% - ${margin.left - 4}px); top:${topY0}px; text-align:right;">$h(\\theta)$</span>`;
+  html += `<span class="chart-label" style="right:calc(100% - ${margin.left - 4}px); top:${botY0}px; text-align:right;">$f(\\theta)$</span>`;
+  html += `<span class="chart-label" style="right:calc(100% - ${margin.left - 6}px); top:${toYf(0) - 6}px; text-align:right;">$0$</span>`;
+  // X-axis labels
+  html += `<span class="chart-label" style="left:${toX(0) - 8}px; top:${botY0 + botH + 4}px;">$0°$</span>`;
+  html += `<span class="chart-label" style="left:${toX(45) - 10}px; top:${botY0 + botH + 4}px;">$45°$</span>`;
+  html += `<span class="chart-label" style="left:${toX(90) - 12}px; top:${botY0 + botH + 4}px;">$90°$</span>`;
+  // h_i legend
+  for (let j = 0; j < numLegs; j++) {
+    const ly = topY0 + 4 + j * 18;
+    const label = type.labels[j];
+    html += `<div class="chart-legend-item" style="left:${legendX}px; top:${ly}px;">` +
+      `<span class="chart-legend-line" style="background:${LEG_CSS_COLORS[j]}"></span>` +
+      `$h_{${label}}$</div>`;
+  }
   // f(θ) legend
-  const fLegY = botY0 + 8;
-  chartCtx.strokeStyle = '#555';
-  chartCtx.lineWidth = 2;
-  chartCtx.beginPath();
-  chartCtx.moveTo(legendX, fLegY);
-  chartCtx.lineTo(legendX + 14, fLegY);
-  chartCtx.stroke();
-  chartCtx.fillStyle = '#666';
-  chartCtx.font = '10px Georgia';
-  chartCtx.textAlign = 'left';
-  chartCtx.fillText('f(θ)', legendX + 18, fLegY + 3);
+  const fLegY = botY0 + 4;
+  html += `<div class="chart-legend-item" style="left:${legendX}px; top:${fLegY}px;">` +
+    `<span class="chart-legend-line" style="background:#555"></span>` +
+    `$f(\\theta)$</div>`;
+  if (drawChart._lastLabels !== html) {
+    drawChart._lastLabels = html;
+    labelsEl.innerHTML = html;
+    if (window.MathJax && MathJax.typeset) MathJax.typeset([labelsEl]);
+  }
 }
 
 // ============================================================
@@ -1317,7 +1325,7 @@ function animate(time) {
   lastTime = time;
 
   if (state.animating) {
-    let deg = parseFloat(thetaSlider.value) + dt * 6 * state.animDir;
+    let deg = parseFloat(thetaSlider.value) + dt * 10 * state.animDir;
     if (deg >= 90) { deg = 90; state.animDir = -1; }
     if (deg <= 0) { deg = 0; state.animDir = 1; }
     thetaSlider.value = deg.toFixed(1);
