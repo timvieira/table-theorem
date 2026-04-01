@@ -275,12 +275,12 @@
       but the fourth may hover or dig in. Define the <em>wobble function</em>:
     </p>
     <p style="text-align:center; margin: 10px 0;">
-      $$f(\theta) = \bigl(h_A(\theta) + h_C(\theta)\bigr) - \bigl(h_B(\theta) + h_D(\theta)\bigr)$$
+      $$f(\theta) = \bigl(h_{\color{#c25a4e}A}(\theta) + h_{\color{#c49a3a}C}(\theta)\bigr) - \bigl(h_{\color{#4a9a8f}B}(\theta) + h_{\color{#7b6fa0}D}(\theta)\bigr)$$
     </p>
     <p>
       where $h_i(\theta)$ is the floor height at leg $i$'s position when the table
       is rotated by angle $\theta$. For a square table, rotating by $90°$ swaps the diagonal
-      pairs $(A,C)$ and $(B,D)$, so:
+      pairs $(\color{#c25a4e}A\color{#333},\color{#c49a3a}C\color{#333})$ and $(\color{#4a9a8f}B\color{#333},\color{#7b6fa0}D\color{#333})$, so:
     </p>
     <div style="display: flex; align-items: center; justify-content: center; gap: 32px; margin: 16px 0; flex-wrap: wrap;">
       <svg viewBox="0 0 240 200" width="192" height="160" style="flex-shrink: 0; overflow: visible;">
@@ -300,8 +300,8 @@
         <text x="8" y="180" font-family="EB Garamond, Georgia, serif" font-size="16" fill="#c49a3a" font-weight="575">C</text>
         <text x="185" y="180" font-family="EB Garamond, Georgia, serif" font-size="16" fill="#7b6fa0" font-weight="575">D</text>
         <!-- Diagonal pair labels -->
-        <text x="100" y="85" font-family="EB Garamond, Georgia, serif" font-size="11" fill="#999" text-anchor="middle">(A,C)</text>
-        <text x="100" y="125" font-family="EB Garamond, Georgia, serif" font-size="11" fill="#999" text-anchor="middle">(B,D)</text>
+        <text x="100" y="85" font-family="EB Garamond, Georgia, serif" font-size="11" text-anchor="middle">(<tspan fill="#c25a4e">A</tspan>,<tspan fill="#c49a3a">C</tspan>)</text>
+        <text x="100" y="125" font-family="EB Garamond, Georgia, serif" font-size="11" text-anchor="middle">(<tspan fill="#4a9a8f">B</tspan>,<tspan fill="#7b6fa0">D</tspan>)</text>
         <!-- Rotation arrow -->
         <defs>
           <marker id="arrowhead" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
@@ -1381,7 +1381,7 @@ function drawChart() {
     const label = type.labels[j];
     html += `<div class="chart-legend-item" style="left:${legendX}px; top:${ly}px;">` +
       `<span class="chart-legend-line" style="background:${LEG_CSS_COLORS[j]}"></span>` +
-      `$h_{${label}}$</div>`;
+      `$h_{\\color{${LEG_CSS_COLORS[j]}}${label}}$</div>`;
   }
   // f(θ) legend
   const fLegY = botY0 + 4;
