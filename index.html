@@ -846,7 +846,6 @@ function updateTable() {
   // map exactly to the 4 top positions.
   if (numLegs >= 4) {
     const tops = placement.map(p => p.top);
-    if (tops.some(t => !t)) { console.error('Missing top in placement'); return; }
     const center = new THREE.Vector3();
     tops.forEach(t => center.add(t));
     center.divideScalar(4);
@@ -1326,7 +1325,7 @@ function animate(time) {
     thetaVal.textContent = deg.toFixed(1) + '°';
   }
 
-  updateTable();
+  try { updateTable(); } catch(e) { console.error('updateTable error:', e.message); }
   drawChart();
   controls.update();
   renderer.render(scene, camera);
