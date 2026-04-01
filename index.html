@@ -916,33 +916,61 @@ function updateTable() {
     const col1 = new THREE.Vector3().crossVectors(col2, col0).normalize(); // up (unit)
 
     if (isEamesGLB) {
-      // Position at the centroid of grounded feet only (not the hovering one)
-      const groundedFeet = placement.filter(p => p.onGround).map(p => p.foot);
-      const basePos = new THREE.Vector3();
-      groundedFeet.forEach(f => basePos.add(f));
-      basePos.divideScalar(groundedFeet.length || 1);
+      // The GLB model's 4 leg tips in normalized model-local space:
+      const modelTips = [
+        new THREE.Vector3(+0.255, 0, +0.231),  // front-right
+        new THREE.Vector3(-0.256, 0, +0.232),  // front-left
+        new THREE.Vector3(-0.256, 0, -0.311),  // back-left
+        new THREE.Vector3(+0.255, 0, -0.310),  // back-right
+      ];
+      // We want to transform the model so modelTips[i] → placement[i].foot
+      // Solve: foot = origin + R * scale * modelTip
+      // Using the same 2x2 approach as placeTable: derive axes from two pairs
+      const feet = placement.map(p => p.foot);
+      const feetCenter = new THREE.Vector3();
+      feet.forEach(f => feetCenter.add(f));
+      feetCenter.divideScalar(4);
+      const tipsCenter = new THREE.Vector3();
+      modelTips.forEach(t => tipsCenter.add(t));
+      tipsCenter.divideScalar(4);
 
-      const rightVec = col0.clone().normalize();
-      const upVec = col1;
-      const forwardVec = new THREE.Vector3().crossVectors(rightVec, upVec).negate().normalize();
-      tabletop.position.copy(basePos);
-      const basisMat = new THREE.Matrix4().makeBasis(rightVec, upVec, forwardVec);
-      tabletop.setRotationFromMatrix(basisMat);
-      const span = Math.max(col0.length(), col2.length()) * 1.1;
-      tabletop.scale.set(span, span, span);
+      // Compute the transform that maps tip deltas to foot deltas
+      const dt01 = new THREE.Vector3().subVectors(modelTips[1], modelTips[0]);
+      const dt02 = new THREE.Vector3().subVectors(modelTips[3], modelTips[0]);
+      const df01 = new THREE.Vector3().subVectors(feet[1], feet[0]);
+      const df02 = new THREE.Vector3().subVectors(feet[3], feet[0]);
 
-      // Push model up if its bounding box dips below the floor
-      tabletop.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(tabletop);
-      // Sample floor height at the model's lowest point
-      const minPt = new THREE.Vector3(box.min.x, box.min.y, box.min.z);
-      const floorAtMin = floor.height(
-        (box.min.x + box.max.x) / 2,
-        (box.min.z + box.max.z) / 2
-      );
-      if (box.min.y < floorAtMin) {
-        tabletop.position.y += floorAtMin - box.min.y;
+      // We need: df01 = R*s * dt01, df02 = R*s * dt02
+      // This maps model space to world space
+      // Build the world matrix columns from the foot positions
+      // col_x maps model-local X, col_z maps model-local Z
+      const a00 = dt01.x, a01 = dt01.z;
+      const a10 = dt02.x, a11 = dt02.z;
+      const det = a00 * a11 - a01 * a10;
+      if (Math.abs(det) > 1e-10) {
+        const colX = df01.clone().multiplyScalar(a11 / det).addScaledVector(df02, -a01 / det);
+        const colZ = df01.clone().multiplyScalar(-a10 / det).addScaledVector(df02, a00 / det);
+        const colY = new THREE.Vector3().crossVectors(colZ, colX).normalize();
+
+        // Origin: feet[0] = origin + colX * modelTips[0].x + colZ * modelTips[0].z
+        const origin = feet[0].clone()
+          .addScaledVector(colX, -modelTips[0].x)
+          .addScaledVector(colZ, -modelTips[0].z);
+
+        // Scale colY to match the average scale of colX/colZ
+        const avgScale = (colX.length() / Math.abs(dt01.x || 1) + colZ.length() / Math.abs(dt02.z || 1)) / 2;
+        colY.multiplyScalar(avgScale * 0.5); // Y scale for model height
+
+        tabletop.matrixAutoUpdate = false;
+        tabletop.matrix.set(
+          colX.x, colY.x, colZ.x, origin.x,
+          colX.y, colY.y, colZ.y, origin.y,
+          colX.z, colY.z, colZ.z, origin.z,
+          0, 0, 0, 1
+        );
+        tabletop.matrixWorldNeedsUpdate = true;
       }
+
     } else {
       // Set world matrix directly: columns are the axis*scale vectors
       // Column-major: [col0.x, col0.y, col0.z, 0,  col1.x, col1.y, col1.z, 0,  col2.x, col2.y, col2.z, 0,  cx, cy, cz, 1]
