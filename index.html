@@ -1333,7 +1333,7 @@ function animate(time) {
     thetaVal.textContent = deg.toFixed(1) + '°';
   }
 
-  try { updateTable(); } catch(e) { console.error('updateTable error:', e.message); }
+  try { updateTable(); } catch(e) { if (!animate._errLogged) { console.error('updateTable error:', e.message, e.stack); animate._errLogged = true; } }
   drawChart();
   controls.update();
   renderer.render(scene, camera);
