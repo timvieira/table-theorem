@@ -40,6 +40,11 @@
     gap: 20px;
     padding: 16px 20px;
   }
+  #left-column {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
   #scene-container {
     width: 640px;
     height: 480px;
@@ -148,20 +153,25 @@
     height: 2px;
     display: inline-block;
   }
+  #leg-status-bar {
+    background: #f3f3ed;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 6px 12px;
+  }
   #leg-indicators {
     display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
   }
   .leg-indicator {
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 0.85em;
-    padding: 4px 8px;
+    font-size: 0.82em;
+    padding: 2px 6px;
     border-radius: 4px;
     background: #e8e8e2;
-    min-width: 110px;
   }
   .leg-dot {
     width: 10px;
@@ -207,7 +217,12 @@
 </div>
 
 <div id="main">
-  <div id="scene-container"></div>
+  <div id="left-column">
+    <div id="scene-container"></div>
+    <div id="leg-status-bar">
+      <div id="leg-indicators"></div>
+    </div>
+  </div>
   <div id="side-panel">
     <div class="panel">
       <h3>Controls</h3>
@@ -227,8 +242,8 @@
       </div>
       <div class="control-row">
         <label>Floor lumpiness</label>
-        <input type="range" id="lumpiness-slider" min="0" max="100" step="1" value="50">
-        <span class="val" id="lumpiness-val">50</span>
+        <input type="range" id="lumpiness-slider" min="0" max="100" step="1" value="75">
+        <span class="val" id="lumpiness-val">1.58</span>
       </div>
       <div class="control-row">
         <label>Table size</label>
@@ -247,10 +262,6 @@
         <canvas id="chart-canvas"></canvas>
         <div id="chart-labels"></div>
       </div>
-    </div>
-    <div class="panel">
-      <h3>Leg status</h3>
-      <div id="leg-indicators"></div>
     </div>
   </div>
 </div>
@@ -291,8 +302,12 @@
         <text x="100" y="85" font-family="EB Garamond, Georgia, serif" font-size="11" fill="#999" text-anchor="middle">(A,C)</text>
         <text x="100" y="125" font-family="EB Garamond, Georgia, serif" font-size="11" fill="#999" text-anchor="middle">(B,D)</text>
         <!-- Rotation arrow -->
-        <path d="M 130 10 A 45 45 0 0 1 167 55" fill="none" stroke="#999" stroke-width="1.2"/>
-        <polygon points="167,55 160,48 163,58" fill="#999"/>
+        <defs>
+          <marker id="arrowhead" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+            <polygon points="0,0 7,2.5 0,5" fill="#999"/>
+          </marker>
+        </defs>
+        <path d="M 135 12 A 50 50 0 0 1 170 52" fill="none" stroke="#999" stroke-width="1.2" marker-end="url(#arrowhead)"/>
         <text x="155" y="10" font-family="EB Garamond, Georgia, serif" font-size="11" fill="#999">90°</text>
       </svg>
       <div>
@@ -432,7 +447,7 @@ const TABLE_TYPES = window.TABLE_TYPES = {
 const state = window._state = {
   theta: 0,            // rotation angle in radians
   tableRadius: 1.8,    // half-diagonal of the square table
-  lumpiness: 0.5,
+  lumpiness: 1.58,
   animating: false,
   animDir: 1,
   tableType: 'square',
