@@ -57,9 +57,9 @@
   #scene-container:active { cursor: grabbing; }
   #side-panel {
     width: 360px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+  }
+  #side-panel > .panel {
+    padding-top: 10px;
   }
   .panel {
     background: #f3f3ed;
@@ -81,7 +81,7 @@
   }
   .control-row label {
     width: 120px;
-    font-size: 0.9em;
+    font-size: 0.8em;
     color: #666;
   }
   .control-row input[type="range"] {
@@ -121,7 +121,7 @@
   button.active { background: #d0d0c4; border-color: #999; font-weight: 575; }
   #chart-container {
     width: 100%;
-    height: 300px;
+    height: 280px;
     position: relative;
   }
   #chart-canvas {
@@ -198,6 +198,7 @@
   #buttons-row {
     display: flex;
     gap: 6px;
+    margin-bottom: 10px;
   }
   #buttons-row button {
     flex: 1;
@@ -258,8 +259,6 @@
         <button id="btn-animate" class="">Animate</button>
         <button id="btn-find-zero">Find Balance</button>
       </div>
-    </div>
-    <div class="panel">
       <div id="chart-container">
         <canvas id="chart-canvas"></canvas>
         <div id="chart-labels"></div>
@@ -1181,8 +1180,8 @@ function drawChart() {
   const legendW = 56;
   const margin = { left: 40, right: legendW + 8, top: 12, bottom: 28 };
   const gap = 16;
-  const topH = (H - margin.top - margin.bottom - gap) * 0.55;
-  const botH = (H - margin.top - margin.bottom - gap) * 0.45;
+  const topH = (H - margin.top - margin.bottom - gap) * 0.38;
+  const botH = (H - margin.top - margin.bottom - gap) * 0.62;
   const plotW = W - margin.left - margin.right;
 
   // Store layout for pointer interaction
