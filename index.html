@@ -697,6 +697,10 @@ function placeTable(theta, R) {
   // 4-leg case: for each triplet, compute the rigid body placement
   let bestConfig = null;
 
+  // Derive right/forward from theta + up (consistent regardless of which leg is skipped)
+  const cosT = Math.cos(theta);
+  const sinT = Math.sin(theta);
+
   for (let skip = 0; skip < 4; skip++) {
     const grounded = [0,1,2,3].filter(i => i !== skip);
     const gpts = grounded.map(i => floorPts[i]);
@@ -707,27 +711,25 @@ function placeTable(theta, R) {
     let up = new THREE.Vector3().crossVectors(fv1, fv2).normalize();
     if (up.y < 0) up.negate();
 
-    // Build tabletop axes from the grounded leg positions
-    // right = direction from leg 1 to leg 0 among grounded, projected onto tabletop plane
-    const groundedTops = gpts.map(g => g.clone().addScaledVector(up, LEG_LENGTH));
-    // Use first two grounded legs for right direction
-    let right = new THREE.Vector3().subVectors(groundedTops[0], groundedTops[1]).normalize();
-    let forward = new THREE.Vector3().crossVectors(right, up).negate().normalize();
+    // Tabletop axes: project the table's rotated local axes onto the tilted plane
+    let rawRight = new THREE.Vector3(cosT, 0, sinT); // table's local X in world XZ
+    let right = rawRight.clone().addScaledVector(up, -rawRight.dot(up)).normalize();
+    let forward = new THREE.Vector3().crossVectors(up, right).normalize();
 
-    // Tabletop center from grounded tops
-    const tabCenter = new THREE.Vector3();
-    groundedTops.forEach(t => tabCenter.add(t));
-    tabCenter.divideScalar(3);
-    // Adjust: center should be centroid of ALL 4 tops, not just 3.
-    // Compute 4th leg top from rigid body geometry:
-    const sl = localLegs[skip];
-    const skipLocalOffset = new THREE.Vector3()
-      .addScaledVector(right, sl[0] * half)
-      .addScaledVector(forward, sl[1] * half);
-    // We need the centroid of all 4 legs, so compute the 4th top
-    // relative to the 3 grounded tops. Use the centroid of grounded legs
-    // in local space to find the true center.
-    // Simpler: compute all 4 tops directly.
+    // Use a reference grounded leg to anchor the rigid body in world space.
+    // The reference leg's foot is on the floor; its top is foot + LEG_LENGTH * up.
+    const ref = grounded[0];
+    const refFoot = gpts[0]; // floor position of reference leg
+    const refTop = refFoot.clone().addScaledVector(up, LEG_LENGTH);
+    // Reference leg's local offset from tabletop center:
+    const refLL = localLegs[ref];
+    const refLocalOff = new THREE.Vector3()
+      .addScaledVector(right, refLL[0] * half)
+      .addScaledVector(forward, refLL[1] * half);
+    // Tabletop center = refTop - refLocalOff
+    const tabCenter = refTop.clone().sub(refLocalOff);
+
+    // Compute all 4 leg positions from the rigid body
     const allTops = [];
     const allFeet = [];
     for (let i = 0; i < 4; i++) {
@@ -735,25 +737,10 @@ function placeTable(theta, R) {
       const localOff = new THREE.Vector3()
         .addScaledVector(right, ll[0] * half)
         .addScaledVector(forward, ll[1] * half);
-      // For grounded legs, the foot is on the floor and top = foot + LEG_LENGTH*up
-      // For the skipped leg, we derive from the rigid body
-      if (i === skip) {
-        // Top position relative to a grounded leg's top:
-        // top_skip = top_grounded[0] + (localOff_skip - localOff_grounded[0])
-        const ref = grounded[0];
-        const refLL = localLegs[ref];
-        const refLocalOff = new THREE.Vector3()
-          .addScaledVector(right, refLL[0] * half)
-          .addScaledVector(forward, refLL[1] * half);
-        const top = groundedTops[0].clone().add(localOff).sub(refLocalOff);
-        const foot = top.clone().addScaledVector(up, -LEG_LENGTH);
-        allTops.push(top);
-        allFeet.push(foot);
-      } else {
-        const gIdx = grounded.indexOf(i);
-        allTops.push(groundedTops[gIdx]);
-        allFeet.push(gpts[gIdx]);
-      }
+      const top = tabCenter.clone().add(localOff);
+      const foot = top.clone().addScaledVector(up, -LEG_LENGTH);
+      allTops.push(top);
+      allFeet.push(foot);
     }
 
     const gap = allFeet[skip].y - p[skip].floorZ;
