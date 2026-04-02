@@ -184,9 +184,12 @@
     text-align: right;
   }
   #explanation {
-    max-width: 1020px;
-    margin: 0 auto;
+    display: flex;
+    justify-content: center;
     padding: 0 20px 40px;
+  }
+  #explanation > .panel {
+    width: 1020px;
   }
   #explanation .panel {
     line-height: 1.6;
@@ -320,14 +323,14 @@
     <p>
       Since $f(\theta)$ is continuous (the floor is continuous) and changes sign over $[0°, 90°]$, the
       <em>Intermediate Value Theorem</em> guarantees some $\theta^*$ where
-      $f(\theta^*) = 0$ &mdash; all four legs touch the ground.
+      $f(\theta^*) = 0$&mdash;all four legs touch the ground.
     </p>
     <h3 style="margin-top: 16px;">Limitations and generalizations</h3>
     <p>
-      The theorem requires a <em>square</em> footprint &mdash; equal diagonals ensure that a 90&deg; rotation swaps the
+      The theorem requires a <em>square</em> footprint&mdash;equal diagonals ensure that a 90&deg; rotation swaps the
       diagonal pairs. For a <em>rectangular</em> table, this symmetry breaks and balance is not guaranteed.
       A <em>tripod</em> (three legs) never wobbles at all: three points always define a plane. The key insight
-      is that the theorem applies to the geometry of the contact points, not the object itself &mdash; any
+      is that the theorem applies to the geometry of the contact points, not the object itself&mdash;any
       four-footed object with a square base (like a chair) qualifies.
     </p>
     <p style="margin-top: 10px; font-size: 0.88em; color: #999;">
@@ -408,7 +411,7 @@ const TABLE_TYPES = window.TABLE_TYPES = {
     topAspect: [1, 1],
     topColor: 0x8B6914,
     theoremApplies: true,
-    desc: 'Classic case — always stabilizable by rotation.',
+    desc: 'Classic case—always stabilizable by rotation.',
   },
   rectangle: {
     name: 'Rectangular table',
@@ -418,7 +421,7 @@ const TABLE_TYPES = window.TABLE_TYPES = {
     topAspect: [1.4, 1],
     topColor: 0x8B6914,
     theoremApplies: false,
-    desc: 'Theorem fails — 90° rotation does not swap diagonal pairs for non-square rectangles.',
+    desc: 'Theorem fails—90° rotation does not swap diagonal pairs for non-square rectangles.',
   },
   tripod: {
     name: 'Tripod',
@@ -428,7 +431,7 @@ const TABLE_TYPES = window.TABLE_TYPES = {
     topAspect: [1, 1],
     topColor: 0x8B6914,
     theoremApplies: null,
-    desc: 'Three legs always define a plane — a tripod never wobbles!',
+    desc: 'Three legs always define a plane—a tripod never wobbles!',
   },
   eames: {
     name: 'Eames chair',
@@ -438,7 +441,7 @@ const TABLE_TYPES = window.TABLE_TYPES = {
     topAspect: [1, 1],
     topColor: 0xf0ece4,
     theoremApplies: true,
-    desc: 'Square base — the theorem applies to any four-footed object.',
+    desc: 'Square base—the theorem applies to any four-footed object.',
   },
 };
 
@@ -1317,7 +1320,7 @@ function drawChart() {
     chartCtx.fillStyle = '#2e7d32';
     chartCtx.font = '11px Georgia';
     chartCtx.textAlign = 'center';
-    chartCtx.fillText('Always stable — 3 legs define a plane', margin.left + plotW / 2, botY0 + botH / 2 + 4);
+    chartCtx.fillText('Always stable—3 legs define a plane', margin.left + plotW / 2, botY0 + botH / 2 + 4);
   } else {
     for (let i = 0; i < N; i++) {
       if (wobbleData[i].f * wobbleData[i + 1].f < 0) {

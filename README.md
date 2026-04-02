@@ -4,7 +4,7 @@ An interactive 3D visualization demonstrating the mathematical theorem that guar
 
 ## The Theorem
 
-The Wobbly Table Theorem (also known as the intermediate value theorem application for tables) states that for any continuous, reasonably smooth floor surface, a square four-legged table can always be positioned so that all four legs touch the ground — simply by rotating the table around its center.
+The Wobbly Table Theorem (also known as the intermediate value theorem application for tables) states that for any continuous, reasonably smooth floor surface, a square four-legged table can always be positioned so that all four legs touch the ground—simply by rotating the table around its center.
 
 ## Demo
 
