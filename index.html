@@ -81,11 +81,12 @@
     accent-color: #999;
   }
   .control-row .val {
-    width: 48px;
+    min-width: 52px;
     text-align: right;
     font-family: Menlo, Monaco, 'Courier New', monospace;
     font-size: 0.85em;
     color: #333;
+    white-space: nowrap;
   }
   select {
     flex: 1;
@@ -236,7 +237,7 @@
   <div class="entry-content">
 
   <p>A square table on an uneven (but continuous) floor can <em>always</em> be stabilized
-     by rotating it at most 90&deg;.</p>
+     by rotating it $\le 90°$.</p>
 
 <div id="viz-layout">
   <div id="left-column">
