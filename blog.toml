@@ -1,0 +1,3 @@
+build = false
+output = "."
+port = 8768
